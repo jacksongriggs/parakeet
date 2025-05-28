@@ -4,6 +4,9 @@
 # Logs
 logs/
 
+# Cost data
+costs_data.json
+
 # Generated entity snapshots
 ha_entities_*.txt
 

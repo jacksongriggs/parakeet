@@ -6,6 +6,17 @@ export interface ModelCost {
   output: number; // Cost per million output tokens
 }
 
+export interface TTSCost {
+  inputPerMillion: number;  // Cost per million input characters
+  outputPerMillion: number; // Cost per million output audio tokens
+  estimatedPerMinute: number; // Estimated cost per minute of audio
+}
+
+export interface TTSUsage {
+  inputCharacters: number;
+  estimatedMinutes: number;
+}
+
 export interface UsageData {
   promptTokens: number;
   completionTokens: number;
@@ -33,6 +44,16 @@ export interface SessionCosts {
     tokens: number;
     requests: number;
   }>;
+  ttsCost: number;
+  ttsCharacters: number;
+  ttsMinutes: number;
+  ttsRequests: number;
+}
+
+export interface AllTimeCosts extends SessionCosts {
+  startDate: string;
+  lastUpdated: string;
+  sessionCount: number;
 }
 
 export const FREE_TIER_LIMITS: Record<string, FreeTierLimits> = {
@@ -42,6 +63,26 @@ export const FREE_TIER_LIMITS: Record<string, FreeTierLimits> = {
   "gemini-1.5-flash-8b": { requestsPerMinute: 15, requestsPerDay: 1500 },
   "gemini-1.5-flash": { requestsPerMinute: 15, requestsPerDay: 1500 },
   "gemini-1.5-pro": { requestsPerMinute: 2, requestsPerDay: 50 },
+};
+
+// TTS model costs
+export const TTS_COSTS: Record<string, TTSCost> = {
+  // OpenAI TTS models (2025 pricing)
+  "gpt-4o-mini-tts": {
+    inputPerMillion: 0.60,    // $0.60 per 1M characters
+    outputPerMillion: 12.00,   // $12.00 per 1M audio tokens
+    estimatedPerMinute: 0.015  // $0.015 per minute of audio
+  },
+  "tts-1": {
+    inputPerMillion: 15.00,    // Legacy pricing
+    outputPerMillion: 0,       // Charged per input only
+    estimatedPerMinute: 0.015
+  },
+  "tts-1-hd": {
+    inputPerMillion: 30.00,    // Legacy HD pricing
+    outputPerMillion: 0,       // Charged per input only
+    estimatedPerMinute: 0.030
+  }
 };
 
 export const MODEL_COSTS: Record<string, ModelCost> = {
@@ -79,8 +120,71 @@ const sessionCosts: SessionCosts = {
   totalCost: 0,
   totalTokens: 0,
   requestCount: 0,
-  modelBreakdown: {}
+  modelBreakdown: {},
+  ttsCost: 0,
+  ttsCharacters: 0,
+  ttsMinutes: 0,
+  ttsRequests: 0
 };
+
+// File path for persistent storage
+const COSTS_FILE = "./costs_data.json";
+
+// Load all-time costs from file
+export async function loadAllTimeCosts(): Promise<AllTimeCosts | null> {
+  try {
+    const data = await Deno.readTextFile(COSTS_FILE);
+    return JSON.parse(data);
+  } catch {
+    // File doesn't exist or is invalid, return null
+    return null;
+  }
+}
+
+// Save all-time costs to file
+export async function saveAllTimeCosts(costs: AllTimeCosts): Promise<void> {
+  await Deno.writeTextFile(COSTS_FILE, JSON.stringify(costs, null, 2));
+}
+
+// Update all-time costs with current session
+export async function updateAllTimeCosts(): Promise<void> {
+  const allTime = await loadAllTimeCosts();
+  const now = new Date().toISOString();
+  
+  if (!allTime) {
+    // First time, create new record
+    const newAllTime: AllTimeCosts = {
+      ...sessionCosts,
+      startDate: now,
+      lastUpdated: now,
+      sessionCount: 1
+    };
+    await saveAllTimeCosts(newAllTime);
+  } else {
+    // Update existing record
+    allTime.totalCost += sessionCosts.totalCost;
+    allTime.totalTokens += sessionCosts.totalTokens;
+    allTime.requestCount += sessionCosts.requestCount;
+    allTime.ttsCost += sessionCosts.ttsCost;
+    allTime.ttsCharacters += sessionCosts.ttsCharacters;
+    allTime.ttsMinutes += sessionCosts.ttsMinutes;
+    allTime.ttsRequests += sessionCosts.ttsRequests;
+    allTime.lastUpdated = now;
+    allTime.sessionCount++;
+    
+    // Merge model breakdown
+    for (const [model, stats] of Object.entries(sessionCosts.modelBreakdown)) {
+      if (!allTime.modelBreakdown[model]) {
+        allTime.modelBreakdown[model] = { cost: 0, tokens: 0, requests: 0 };
+      }
+      allTime.modelBreakdown[model].cost += stats.cost;
+      allTime.modelBreakdown[model].tokens += stats.tokens;
+      allTime.modelBreakdown[model].requests += stats.requests;
+    }
+    
+    await saveAllTimeCosts(allTime);
+  }
+}
 
 export function trackRequest(modelName: string): {
   withinFreeTier: boolean;
@@ -174,6 +278,50 @@ export function calculateCost(modelName: string, usage: UsageData, withinFreeTie
   };
 }
 
+export function calculateTTSCost(modelName: string, usage: TTSUsage): {
+  cost: number;
+  formattedCost: string;
+} {
+  const costs = TTS_COSTS[modelName];
+  
+  if (!costs) {
+    // Unknown model, assume no cost
+    return {
+      cost: 0,
+      formattedCost: "Unknown TTS model cost"
+    };
+  }
+  
+  // Calculate based on input characters and estimated minutes
+  // Using estimated per minute cost as primary calculation
+  const cost = usage.estimatedMinutes * costs.estimatedPerMinute;
+  
+  // Format cost string
+  let formattedCost: string;
+  if (cost === 0) {
+    formattedCost = "Free";
+  } else if (cost < 0.01) {
+    formattedCost = `$${(cost * 100).toFixed(3)}¢`;
+  } else {
+    formattedCost = `$${cost.toFixed(4)}`;
+  }
+  
+  return {
+    cost,
+    formattedCost
+  };
+}
+
+export function addTTSToSessionCosts(modelName: string, usage: TTSUsage) {
+  const { cost } = calculateTTSCost(modelName, usage);
+  
+  sessionCosts.ttsCost += cost;
+  sessionCosts.totalCost += cost;
+  sessionCosts.ttsCharacters += usage.inputCharacters;
+  sessionCosts.ttsMinutes += usage.estimatedMinutes;
+  sessionCosts.ttsRequests++;
+}
+
 export function addToSessionCosts(modelName: string, usage: UsageData, actualCost: number) {
   sessionCosts.totalCost += actualCost;
   sessionCosts.totalTokens += usage.totalTokens;
@@ -197,7 +345,7 @@ export function getSessionCosts(): SessionCosts {
 }
 
 export function formatSessionSummary(): string {
-  if (sessionCosts.requestCount === 0) {
+  if (sessionCosts.requestCount === 0 && sessionCosts.ttsRequests === 0) {
     return "No requests made this session";
   }
   
@@ -205,7 +353,40 @@ export function formatSessionSummary(): string {
     sessionCosts.totalCost < 0.01 ? `$${(sessionCosts.totalCost * 100).toFixed(3)}¢` :
     `$${sessionCosts.totalCost.toFixed(4)}`;
   
-  return `Session: ${sessionCosts.requestCount} requests, ${sessionCosts.totalTokens} tokens, ${costStr} total`;
+  let summary = `Session: ${sessionCosts.requestCount} AI requests, ${sessionCosts.totalTokens} tokens`;
+  
+  if (sessionCosts.ttsRequests > 0) {
+    summary += `, ${sessionCosts.ttsRequests} TTS (${sessionCosts.ttsMinutes.toFixed(1)}min)`;
+  }
+  
+  summary += `, ${costStr} total`;
+  
+  return summary;
+}
+
+export async function formatAllTimeSummary(): Promise<string> {
+  const allTime = await loadAllTimeCosts();
+  
+  if (!allTime) {
+    return "No all-time data available";
+  }
+  
+  const costStr = allTime.totalCost === 0 ? "Free" : 
+    allTime.totalCost < 0.01 ? `$${(allTime.totalCost * 100).toFixed(3)}¢` :
+    `$${allTime.totalCost.toFixed(4)}`;
+  
+  const daysSinceStart = Math.floor((Date.now() - new Date(allTime.startDate).getTime()) / (1000 * 60 * 60 * 24));
+  
+  let summary = `All-time (${daysSinceStart}d, ${allTime.sessionCount} sessions): `;
+  summary += `${allTime.requestCount} AI requests, ${allTime.totalTokens} tokens`;
+  
+  if (allTime.ttsRequests > 0) {
+    summary += `, ${allTime.ttsRequests} TTS (${allTime.ttsMinutes.toFixed(1)}min)`;
+  }
+  
+  summary += `, ${costStr} total`;
+  
+  return summary;
 }
 
 export function formatUsageWithCost(modelName: string, usage: UsageData, trackRequests = true): string {
