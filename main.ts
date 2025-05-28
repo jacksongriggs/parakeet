@@ -1,5 +1,5 @@
 import { ParrotStreamSDK } from "@parrot/sdk";
-import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT } from "./config.ts";
+import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT, USE_PARTIAL_RESULTS, PARTIAL_TIMEOUT } from "./config.ts";
 import { abort, analyse } from "./ai.ts";
 import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
@@ -17,24 +17,42 @@ async function parrot(): Promise<void> {
   
   let isAwake = false;
   let wakeTimeout: number | null = null;
+  let lastPartialTime: number | null = null;
+  let partialTimeout: number | null = null;
+  let lastPartialText: string | null = null;
+  let processedUtteranceIds = new Set<string>();
   
   const parrot = new ParrotStreamSDK({
     channels: [1],
     device: "MacBook Pro Microphone",
     addsPunctuation: true,
-    taskHint: "confirmation",
-    vocabulary: ["catio", "basso", WAKE_WORD]
+    taskHint: "search",
+    vocabulary: ["catio", "basso", WAKE_WORD],
+    noPartialResults: !USE_PARTIAL_RESULTS  // This improves performance and reduces delay when false
   });
 
   parrot.on("transcription", async (result) => {
     const {
       channel,
       utterance: {
-        utterance: { id: _id, text, isBoundary },
+        utterance: { id, text, isBoundary },
       },
     } = result;
 
     if (isBoundary) {
+      // Clear any pending partial timeout
+      if (partialTimeout) {
+        clearTimeout(partialTimeout);
+        partialTimeout = null;
+      }
+      
+      // Check if we already processed this utterance
+      if (processedUtteranceIds.has(id)) {
+        await logger.debug("VOICE", "Skipping already processed utterance", { id, text });
+        return;
+      }
+      
+      processedUtteranceIds.add(id);
       const lowerText = text.toLowerCase();
       
       // Check if this is the wake word
@@ -59,6 +77,8 @@ async function parrot(): Promise<void> {
         // If the text is just the wake word, don't process it as a command
         const withoutWakeWord = lowerText.replace(WAKE_WORD.toLowerCase(), "").trim();
         if (!withoutWakeWord) {
+          // Still set up partial monitoring even if just wake word
+          lastPartialText = null;
           return;
         }
         
@@ -103,12 +123,70 @@ async function parrot(): Promise<void> {
           clearTimeout(wakeTimeout);
           wakeTimeout = null;
         }
+        
+        // Clean up old utterance IDs periodically (keep last 100)
+        if (processedUtteranceIds.size > 100) {
+          const idsArray = Array.from(processedUtteranceIds);
+          processedUtteranceIds = new Set(idsArray.slice(-50));
+        }
       } else {
         // Not awake, waiting for wake word
         await logger.debug("WAKE", "Waiting for wake word", { text, wake_word: WAKE_WORD });
       }
     } else {
-      await logger.debug("VOICE", "Partial transcription", { text, channel });
+      // Handle partial transcriptions with timeout
+      const now = Date.now();
+      await logger.debug("VOICE", "Partial transcription", { 
+        text, 
+        channel,
+        timestamp: now,
+        timeSinceLastPartial: lastPartialTime ? now - lastPartialTime : 0
+      });
+      lastPartialTime = now;
+      lastPartialText = text;
+      
+      // Clear existing timeout
+      if (partialTimeout) {
+        clearTimeout(partialTimeout);
+      }
+      
+      // Set timeout to process partial as final if no boundary arrives
+      if (isAwake && USE_PARTIAL_RESULTS) {
+        partialTimeout = setTimeout(async () => {
+          if (lastPartialText && !processedUtteranceIds.has(id)) {
+            await logger.info("VOICE", "Processing partial as final (timeout)", { 
+              text: lastPartialText, 
+              channel,
+              timeoutMs: PARTIAL_TIMEOUT 
+            });
+            
+            // Mark as processed to avoid duplicates
+            processedUtteranceIds.add(id);
+            
+            // Process as a command
+            abort();
+            await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${lastPartialText}`);
+            
+            try {
+              const aiResult = await analyse(lastPartialText, tools);
+              await logger.info("AI", "AI analysis completed", { input: lastPartialText, output: aiResult });
+              await logger.info("AI_OUTPUT", aiResult);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              await logger.error("AI", "AI analysis failed", { input: lastPartialText, error: errorMessage });
+              throw error;
+            }
+            
+            // Reset wake state after processing command
+            isAwake = false;
+            if (wakeTimeout) {
+              clearTimeout(wakeTimeout);
+              wakeTimeout = null;
+            }
+          }
+          partialTimeout = null;
+        }, PARTIAL_TIMEOUT);
+      }
     }
   });
 

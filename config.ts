@@ -23,3 +23,7 @@ export const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Wake word configuration
 export const WAKE_WORD = "parakeet";
 export const WAKE_WORD_TIMEOUT = 10 * 1000; // 10 seconds to give command after wake word
+
+// Speech recognition configuration
+export const USE_PARTIAL_RESULTS = true; // Need this true to implement partial timeout
+export const PARTIAL_TIMEOUT = 500; // ms to wait before treating a partial as final
