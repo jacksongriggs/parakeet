@@ -1,7 +1,7 @@
 // AI and OpenAI functionality
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, Tool, LanguageModel, CoreToolMessage, CoreAssistantMessage } from "ai";
+import { streamText, Tool, LanguageModel, CoreToolMessage, CoreAssistantMessage, CoreMessage } from "ai";
 import { getAvailableLights } from "./homeAssistant.ts";
 import type { Message } from "./types.ts";
 import { logger } from "./logger.ts";
@@ -212,19 +212,19 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
           ],
         },
         // Actual conversation history
-        ...conversationHistory.slice(0, -1).map((msg) => {
+        ...conversationHistory.slice(0, -1).map((msg): CoreMessage => {
           // Handle tool messages with content arrays
           if (msg.role === "tool" && Array.isArray(msg.content)) {
             return {
               role: "tool" as const,
-              content: msg.content,
+              content: msg.content as CoreToolMessage["content"],
             };
           }
           // Handle assistant messages with tool calls
           if (msg.role === "assistant" && Array.isArray(msg.content)) {
             return {
               role: "assistant" as const,
-              content: msg.content,
+              content: msg.content as CoreAssistantMessage["content"],
             };
           }
           // Regular text messages
@@ -287,8 +287,7 @@ Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
           conversationHistory.push({
             role: "assistant",
             content: assistantContent,
-            timestamp: new Date(),
-            toolCalls: stepResult.toolCalls
+            timestamp: new Date()
           });
         }
         
@@ -296,17 +295,15 @@ Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
         if (stepResult.toolResults && stepResult.toolResults.length > 0) {
           const toolContent: CoreToolMessage["content"] = stepResult.toolResults.map((tr) => ({
             type: "tool-result" as const,
-            toolCallId: (tr as any).toolCallId,
-            toolName: (tr as any).toolName,
-            result: (tr as any).result,
-            isError: (tr as any).isError
+            toolCallId: (tr as {toolCallId: string}).toolCallId,
+            toolName: (tr as {toolName: string}).toolName,
+            result: (tr as {result: unknown}).result
           }));
           
           conversationHistory.push({
             role: "tool",
             content: toolContent,
-            timestamp: new Date(),
-            toolResults: stepResult.toolResults
+            timestamp: new Date()
           });
         }
       }
@@ -327,7 +324,10 @@ Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
 
     // Add final assistant response if no tool calls were made
     const lastMessage = conversationHistory[conversationHistory.length - 1];
-    if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.toolCalls) {
+    if (!lastMessage || lastMessage.role !== "assistant" || 
+        (typeof lastMessage.content === "string" || 
+         !Array.isArray(lastMessage.content) || 
+         !lastMessage.content.some(c => c.type === "tool-call"))) {
       conversationHistory.push({
         role: "assistant",
         content: result,

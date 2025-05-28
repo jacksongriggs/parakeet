@@ -1,11 +1,10 @@
 // Type definitions and interfaces
+import type { CoreAssistantMessage, CoreToolMessage } from "ai";
 
 export interface Message {
   role: "user" | "assistant" | "tool";
-  content: string | any[];
+  content: string | CoreAssistantMessage["content"] | CoreToolMessage["content"];
   timestamp: Date;
-  toolCalls?: any[];
-  toolResults?: any[];
 }
 
 export interface Light {
