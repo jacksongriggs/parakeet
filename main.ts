@@ -157,6 +157,27 @@ async function parrot(): Promise<void> {
       lastPartialTime = now;
       lastPartialText = text;
       
+      // Check for wake word in partial transcriptions too
+      const lowerText = text.toLowerCase();
+      if (!isAwake && lowerText.includes(WAKE_WORD.toLowerCase())) {
+        isAwake = true;
+        
+        // Clear any existing timeout
+        if (wakeTimeout) {
+          clearTimeout(wakeTimeout);
+        }
+        
+        // Set new timeout
+        wakeTimeout = setTimeout(() => {
+          isAwake = false;
+          wakeTimeout = null;
+          logger.info("WAKE", "Wake word timeout - going back to sleep");
+        }, WAKE_WORD_TIMEOUT_MS);
+        
+        await logger.info("WAKE", "Wake word detected in partial! Listening for commands...", { wake_word: WAKE_WORD });
+        await logger.info("WAKE_DISPLAY", `🦜 ${WAKE_WORD} detected! Listening...`);
+      }
+      
       // Clear existing timeout
       if (partialTimeout) {
         clearTimeout(partialTimeout);
