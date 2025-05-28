@@ -6,7 +6,7 @@ import { getAvailableLights } from "./homeAssistant.ts";
 import type { Message } from "./types.ts";
 import { logger } from "./logger.ts";
 import { getActiveModelConfig, type ModelConfig } from "./modelConfig.ts";
-import { formatUsageWithCost } from "./costCalculator.ts";
+import { formatUsageWithCost, formatAllTimeSummary } from "./costCalculator.ts";
 import { startGeneration, completeGeneration } from "./generationTracker.ts";
 
 export let abortController = new AbortController();
@@ -160,7 +160,9 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
             completionTokens: finalUsage.completionTokens,
             totalTokens: finalUsage.totalTokens
           });
+          const allTimeStr = await formatAllTimeSummary();
           await logger.info("AI", `💰 ${usageStr}`);
+          await logger.info("AI", `📊 ${allTimeStr}`);
         }
       },
       onStepFinish: async (stepResult) => {

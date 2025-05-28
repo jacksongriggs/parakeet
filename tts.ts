@@ -12,6 +12,7 @@ import {
   TTS_MODEL, 
   TTS_INSTRUCTIONS 
 } from "./config.ts";
+import { addTTSToSessionCosts, type TTSUsage } from "./costCalculator.ts";
 
 // Initialize TTS components as singletons
 let speaker: Speaker | null = null;
@@ -65,12 +66,31 @@ export async function speak(text: string, signal?: AbortSignal): Promise<void> {
     // Generate speech audio
     const audio = await speaker.speak(text, signal);
     
-    // Play the audio
+    // Play the audio (this will calculate exact duration)
     await audioPlayer.play(audio, signal);
+    
+    // Use exact duration from Squawk SDK if available, otherwise estimate
+    const actualMinutes = audio.duration ? audio.duration / 60 : text.length / (5 * 150);
+    
+    // Track TTS usage for cost calculation
+    const ttsUsage: TTSUsage = {
+      inputCharacters: text.length,
+      estimatedMinutes: actualMinutes
+    };
+    
+    // Add to session costs
+    addTTSToSessionCosts(TTS_MODEL, ttsUsage);
+    logger.debug("TTS", "TTS cost tracked", { 
+      model: TTS_MODEL,
+      characters: text.length,
+      actualDuration: audio.duration ? `${audio.duration.toFixed(2)}s` : "estimated",
+      actualMinutes: actualMinutes.toFixed(3),
+      audioSize: audio.size || "unknown"
+    });
     
     logger.debug("TTS", "Speech playback completed");
   } catch (error) {
-    if (error.name === 'AbortError' || (error as Error).message?.includes('aborted')) {
+    if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('aborted'))) {
       logger.debug("TTS", "Speech generation/playback aborted");
     } else {
       logger.error("TTS", "TTS error", error);

@@ -6,6 +6,7 @@ import { logger } from "./logger.ts";
 import { getActiveModelConfig, listAvailableModels } from "./modelConfig.ts";
 import { detectUtteranceContinuation, cancelAndRollback } from "./generationTracker.ts";
 import { initializeTTS, speak, stopSpeaking } from "./tts.ts";
+import { updateAllTimeCosts } from "./costCalculator.ts";
 
 await logger.sessionStart();
 
@@ -25,6 +26,20 @@ await logger.info("CONFIG", "Environment configuration", {
 if (Deno.args.includes("--list-models")) {
   listAvailableModels();
   Deno.exit(0);
+}
+
+// Handle graceful shutdown
+const shutdown = async () => {
+  await logger.info("MAIN", "Shutting down gracefully...");
+  await updateAllTimeCosts();
+  await logger.sessionEnd();
+  Deno.exit(0);
+};
+
+// Register signal handlers
+if (Deno.build.os !== "windows") {
+  Deno.addSignalListener("SIGINT", shutdown);
+  Deno.addSignalListener("SIGTERM", shutdown);
 }
 
 
@@ -330,6 +345,8 @@ if (import.meta.main) {
     await logger.error("MAIN", "Application crashed", { error: errorMessage, stack: errorStack });
     throw error;
   } finally {
+    // Save all-time costs before ending session
+    await updateAllTimeCosts();
     await logger.sessionEnd();
   }
 }
