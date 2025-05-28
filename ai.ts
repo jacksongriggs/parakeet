@@ -142,7 +142,7 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
         },
       ],
       system:
-        `Home Assistant voice control. Use entity_ids: ${lightsList || "none"}. Tools: setLightState, setLightStateByArea, setTemperature, setAreaTemperature, setLightTemperature, setAreaLightTemperature. Always use tools for control. Brief responses.`,
+        `Home Assistant voice control. Wake word "polly" has been removed from commands. Available lights: ${lightsList || "none"}. If entities don't exist, use findEntity or getAllEntities to discover available devices. Always use tools for control. Brief responses.`,
       abortSignal: abortController.signal,
       tools,
       maxSteps: 5,

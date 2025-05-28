@@ -23,6 +23,25 @@ if (Deno.args.includes("--list-models")) {
 }
 
 
+// Helper function to strip wake word from command text
+function stripWakeWord(text: string): string {
+  const lowerText = text.toLowerCase();
+  const lowerWakeWord = WAKE_WORD.toLowerCase();
+  
+  // Find wake word and remove it along with any leading/trailing whitespace
+  const wakeWordIndex = lowerText.indexOf(lowerWakeWord);
+  if (wakeWordIndex !== -1) {
+    const beforeWake = text.substring(0, wakeWordIndex).trim();
+    const afterWake = text.substring(wakeWordIndex + WAKE_WORD.length).trim();
+    
+    // Combine non-empty parts with a space
+    const parts = [beforeWake, afterWake].filter(part => part.length > 0);
+    return parts.join(' ').trim();
+  }
+  
+  return text.trim();
+}
+
 async function parrot(): Promise<void> {
   await logger.info("MAIN", "Initializing ParrotStreamSDK");
   
@@ -94,7 +113,7 @@ async function parrot(): Promise<void> {
         }
         
         // If there's text after the wake word, process it
-        const commandText = text.substring(text.toLowerCase().indexOf(WAKE_WORD.toLowerCase()) + WAKE_WORD.length).trim();
+        const commandText = stripWakeWord(text);
         if (commandText) {
           abort();
           
@@ -115,16 +134,17 @@ async function parrot(): Promise<void> {
         // We're awake and this is a command
         abort();
         
-        await logger.info("VOICE", "Voice command received", { text, channel });
-        await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${text}`);
+        const commandText = stripWakeWord(text);
+        await logger.info("VOICE", "Voice command received", { text: commandText, channel });
+        await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
         
         try {
-          const aiResult = await analyse(text, tools);
-          await logger.info("AI", "AI analysis completed", { input: text, output: aiResult });
+          const aiResult = await analyse(commandText, tools);
+          await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
           await logger.info("AI_OUTPUT", aiResult);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          await logger.error("AI", "AI analysis failed", { input: text, error: errorMessage });
+          await logger.error("AI", "AI analysis failed", { input: commandText, error: errorMessage });
           throw error;
         }
         
@@ -188,8 +208,9 @@ async function parrot(): Promise<void> {
         partialTimeout = setTimeout(async () => {
           const partialId = `${id}_partial_${Date.now()}`;
           if (lastPartialText && !processedUtteranceIds.has(id) && !processedUtteranceIds.has(partialId)) {
+            const commandText = stripWakeWord(lastPartialText);
             await logger.info("VOICE", "Processing partial as final (timeout)", { 
-              text: lastPartialText, 
+              text: commandText, 
               channel,
               timeoutMs: PARTIAL_TIMEOUT 
             });
@@ -200,15 +221,15 @@ async function parrot(): Promise<void> {
             
             // Process as a command
             abort();
-            await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${lastPartialText}`);
+            await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
             
             try {
-              const aiResult = await analyse(lastPartialText, tools);
-              await logger.info("AI", "AI analysis completed", { input: lastPartialText, output: aiResult });
+              const aiResult = await analyse(commandText, tools);
+              await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
               await logger.info("AI_OUTPUT", aiResult);
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
-              await logger.error("AI", "AI analysis failed", { input: lastPartialText, error: errorMessage });
+              await logger.error("AI", "AI analysis failed", { input: commandText, error: errorMessage });
               throw error;
             }
             

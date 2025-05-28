@@ -200,6 +200,59 @@ const z_setLightState = z.object({
 });
 
 export const tools: Record<string, Tool> = {
+  findEntity: {
+    description: "Find entity by name or partial name match - use this when you're not sure about exact entity names",
+    parameters: z.object({
+      name: z.string().describe("Entity name or partial name to search for (e.g., 'polly', 'TV', 'lounge')"),
+      domain: z.string().optional().describe("Optional domain filter (e.g., 'media_player', 'light', 'climate')"),
+    }),
+    execute: async ({ name, domain }) => {
+      await logger.info("TOOL", "Finding entity by name", { name, domain });
+      
+      try {
+        const result = await getAllEntities(domain);
+        const { entitiesByDomain } = result;
+        
+        const matchedEntities: Array<{ entity_id: string; friendly_name: string; domain: string; state: string }> = [];
+        
+        // Search through all entities
+        Object.entries(entitiesByDomain).forEach(([domainName, entities]) => {
+          entities.forEach(entity => {
+            const nameMatch = entity.friendly_name.toLowerCase().includes(name.toLowerCase()) || 
+                            entity.entity_id.toLowerCase().includes(name.toLowerCase());
+            if (nameMatch) {
+              matchedEntities.push({
+                entity_id: entity.entity_id,
+                friendly_name: entity.friendly_name,
+                domain: domainName,
+                state: entity.state
+              });
+            }
+          });
+        });
+        
+        if (matchedEntities.length === 0) {
+          return `No entities found matching "${name}"${domain ? ` in ${domain} domain` : ''}. Use getAllEntities to see what's available.`;
+        }
+        
+        const matchList = matchedEntities.map(e => 
+          `- ${e.friendly_name} (${e.entity_id}) [${e.state}] - ${e.domain}`
+        ).join('\n');
+        
+        await logger.info("TOOL", "Found matching entities", { 
+          searchTerm: name, 
+          domain, 
+          matchCount: matchedEntities.length 
+        });
+        
+        return `Found ${matchedEntities.length} entities matching "${name}":\n${matchList}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to find entity", { name, domain, error: errorMessage });
+        return `Failed to search for entities: ${errorMessage}`;
+      }
+    },
+  },
   getAllEntities: {
     description: "Get all entities from Home Assistant to explore what devices are available",
     parameters: z.object({
