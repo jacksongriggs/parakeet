@@ -595,7 +595,7 @@ export const tools: Record<string, Tool> = {
         const entity_id = entity.includes(".") ? entity : `climate.${entity}`;
         
         let service: string;
-        let serviceData: Record<string, string | number> = { entity_id };
+        const serviceData: Record<string, string | number> = { entity_id };
         
         if (state === "on") {
           service = "turn_on";
@@ -716,7 +716,7 @@ export const tools: Record<string, Tool> = {
         const promises = areaClimate.map(async (entity: ClimateEntity) => {
           try {
             let service: string;
-            let serviceData: Record<string, string | number> = { entity_id: entity.entity_id };
+            const serviceData: Record<string, string | number> = { entity_id: entity.entity_id };
             
             if (state === "on") {
               service = "turn_on";
