@@ -24,7 +24,7 @@ export const HOME_ASSISTANT_TOKEN = Deno.env.get("HOME_ASSISTANT_TOKEN") || "";
 
 // Wake word to activate the assistant
 // Say this word to start giving commands
-export const WAKE_WORD = "parakeet";
+export const WAKE_WORD = "polly";
 
 // How long to wait for a command after wake word is detected (in seconds)
 export const WAKE_WORD_TIMEOUT = 10;
