@@ -20,3 +20,11 @@ export interface ClimateEntity {
   friendly_name: string;
   area?: string;
 }
+
+export interface MediaPlayer {
+  entity_id: string;
+  friendly_name: string;
+  area?: string;
+  state: string;
+  volume?: number;
+}

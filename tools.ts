@@ -2,8 +2,8 @@
 
 import { Tool } from "ai";
 import { z } from "zod";
-import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl } from "./homeAssistant.ts";
-import type { ClimateEntity } from "./types.ts";
+import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl, getAvailableMediaPlayers } from "./homeAssistant.ts";
+import type { ClimateEntity, MediaPlayer } from "./types.ts";
 import { logger } from "./logger.ts";
 
 // Color temperature mappings (in Kelvin)
@@ -839,6 +839,137 @@ export const tools: Record<string, Tool> = {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "All climates control failed", { error: errorMessage });
         return `Failed to control all climates: ${errorMessage}`;
+      }
+    },
+  },
+  setMediaPlayerState: {
+    description: "Control media player devices (TV, speakers, etc.) - turn on/off, play/pause, set volume",
+    parameters: z.object({
+      entity: z.string().describe("The entity_id of the media player (e.g. 'media_player.lg_c1_oled' or just 'lg_c1_oled')"),
+      action: z.enum(["turn_on", "turn_off", "play", "pause", "play_pause", "stop", "next_track", "previous_track"]).describe("Action to perform"),
+      volume: z.number().min(0).max(100).optional().describe("Volume level (0-100) - only used with turn_on action"),
+    }),
+    execute: async ({ entity, action, volume }) => {
+      await logger.info("TOOL", "Setting media player state", { entity, action, volume });
+      
+      try {
+        const entity_id = entity.includes(".") ? entity : `media_player.${entity}`;
+        
+        let service: string;
+        const serviceData: Record<string, string | number> = { entity_id };
+        
+        switch (action) {
+          case "turn_on":
+            service = "turn_on";
+            if (volume !== undefined) {
+              // Set volume after turning on
+              await callHomeAssistantService("media_player", "turn_on", serviceData);
+              await callHomeAssistantService("media_player", "volume_set", {
+                entity_id,
+                volume_level: volume / 100,
+              });
+              await logger.debug("TOOL", "Media player turned on and volume set", { entity_id, volume });
+              return `Successfully turned on ${entity_id} and set volume to ${volume}%.`;
+            }
+            break;
+          case "turn_off":
+            service = "turn_off";
+            break;
+          case "play":
+            service = "media_play";
+            break;
+          case "pause":
+            service = "media_pause";
+            break;
+          case "play_pause":
+            service = "media_play_pause";
+            break;
+          case "stop":
+            service = "media_stop";
+            break;
+          case "next_track":
+            service = "media_next_track";
+            break;
+          case "previous_track":
+            service = "media_previous_track";
+            break;
+          default:
+            throw new Error(`Unsupported action: ${action}`);
+        }
+        
+        await callHomeAssistantService("media_player", service, serviceData);
+        
+        await logger.debug("TOOL", "Media player control successful", { entity_id, action });
+        return `Successfully ${action.replace('_', ' ')} ${entity_id}.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Media player control failed", { entity, action, error: errorMessage });
+        return `Failed to ${action.replace('_', ' ')} ${entity}: ${errorMessage}`;
+      }
+    },
+  },
+  setMediaPlayerVolume: {
+    description: "Set volume for media player devices",
+    parameters: z.object({
+      entity: z.string().describe("The entity_id of the media player"),
+      volume: z.number().min(0).max(100).describe("Volume level (0-100)"),
+    }),
+    execute: async ({ entity, volume }) => {
+      await logger.info("TOOL", "Setting media player volume", { entity, volume });
+      
+      try {
+        const entity_id = entity.includes(".") ? entity : `media_player.${entity}`;
+        
+        await callHomeAssistantService("media_player", "volume_set", {
+          entity_id,
+          volume_level: volume / 100,
+        });
+        
+        await logger.debug("TOOL", "Media player volume control successful", { entity_id, volume });
+        return `Successfully set ${entity_id} volume to ${volume}%.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Media player volume control failed", { entity, error: errorMessage });
+        return `Failed to set volume for ${entity}: ${errorMessage}`;
+      }
+    },
+  },
+  getMediaPlayerStatus: {
+    description: "Get current status of media player devices",
+    parameters: z.object({
+      entity: z.string().optional().describe("Specific media player entity_id, or leave empty for all media players"),
+    }),
+    execute: async ({ entity }) => {
+      await logger.info("TOOL", "Getting media player status", { entity });
+      
+      try {
+        if (entity) {
+          const entity_id = entity.includes(".") ? entity : `media_player.${entity}`;
+          const mediaPlayers = await getAvailableMediaPlayers();
+          const player = mediaPlayers.find((mp: MediaPlayer) => mp.entity_id === entity_id);
+          
+          if (!player) {
+            return `Media player ${entity_id} not found.`;
+          }
+          
+          return `${player.friendly_name}: ${player.state} (Volume: ${Math.round((player.volume || 0) * 100)}%)`;
+        } else {
+          const mediaPlayers = await getAvailableMediaPlayers();
+          
+          if (mediaPlayers.length === 0) {
+            return "No media players found.";
+          }
+          
+          const statusList = mediaPlayers.map((mp: MediaPlayer) => 
+            `- ${mp.friendly_name} (${mp.entity_id}): ${mp.state} (Volume: ${Math.round((mp.volume || 0) * 100)}%)`
+          ).join("\n");
+          
+          return `Media Players Status:\n${statusList}`;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to get media player status", { entity, error: errorMessage });
+        return `Failed to get media player status: ${errorMessage}`;
       }
     },
   },

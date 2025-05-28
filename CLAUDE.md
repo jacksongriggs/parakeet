@@ -29,7 +29,7 @@ Key functionality:
 - Controls Home Assistant devices (lights, switches, etc.) via REST API
 - Maintains conversation history for context-aware interactions
 - Supports area-based and individual device control
-- Wake word activation system ("parakeet" by default)
+- Wake word activation system ("polly" by default)
 - Cost tracking and usage statistics for AI model calls
 
 Key dependencies:
@@ -100,7 +100,7 @@ Environment variables (set in `.env` file):
 ### Tool System
 - Tools defined in tools.ts using Vercel AI SDK format
 - Each tool has description, zod schema parameters, and execute function
-- Tools include: setLightState, getLightStatus, setClimateControl, getClimateStatus
+- Tools include: setLightState, getLightStatus, setClimateControl, getClimateStatus, getAllEntities
 - Tool calls are logged and executed asynchronously
 
 ### Home Assistant Integration
@@ -118,8 +118,25 @@ Environment variables (set in `.env` file):
 - Supports both individual light control and area-based control
 - Tool calling enables direct Home Assistant API interactions
 - Entity caching (5 minutes) for improved performance
-- Wake word activation with 10-second timeout for commands
+- Wake word activation ("polly") with 10-second timeout for commands
+- Partial result processing to handle incomplete transcriptions
+- Race condition prevention for duplicate utterance processing
 - Session-based logging in `logs/` directory with timestamped files
 - Automatic cost calculation and cumulative session tracking
+- Partial result processing with configurable timeout (500ms default)
+- Duplicate utterance prevention with race condition protection
+- Light capability detection with intelligent fallbacks (color vs temperature)
+- Free tier usage tracking for Google models
+
+## Current Integration Plan
+
+- Exploring gradual expansion of Home Assistant device support
+- Planning to add more complex multi-device and scene-based interactions
+- Investigating improved natural language understanding for command parsing
+- Developing more sophisticated error handling and user feedback mechanisms
 
 - Never run the program directly, ask the user to do it
+
+---
+
+**Last updated at commit:** `e6768c7b6316130674a2e9149edde3b06fd4e016`

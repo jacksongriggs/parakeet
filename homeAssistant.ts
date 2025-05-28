@@ -1,14 +1,16 @@
 // Home Assistant integration functionality
 
 import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, CACHE_DURATION_MS } from "./config.ts";
-import type { Light, ClimateEntity } from "./types.ts";
+import type { Light, ClimateEntity, MediaPlayer } from "./types.ts";
 import { logger } from "./logger.ts";
 
 // Cache for Home Assistant entities
 let lightsCache: Light[] = [];
 let climateCache: ClimateEntity[] = [];
+let mediaPlayersCache: MediaPlayer[] = [];
 let lightsCacheTime = 0;
 let climateCacheTime = 0;
+let mediaPlayersCacheTime = 0;
 
 // Helper function to fetch area for an entity
 async function getEntityArea(entityId: string): Promise<string | undefined> {
@@ -275,6 +277,69 @@ export function getBestLightControlMode(light: Light): 'color' | 'temperature' |
   }
 }
 
+export async function getAvailableMediaPlayers(): Promise<MediaPlayer[]> {
+  const now = Date.now();
+
+  // Return cached entities if still fresh
+  if (mediaPlayersCache.length > 0 && now - mediaPlayersCacheTime < CACHE_DURATION_MS) {
+    await logger.debug("HA_CACHE", "Using cached media players data", { mediaPlayersCount: mediaPlayersCache.length });
+    return mediaPlayersCache;
+  }
+
+  await logger.debug("HA_API", "Fetching media players from Home Assistant");
+
+  try {
+    const response = await fetch(`${HOME_ASSISTANT_URL}/api/states`, {
+      headers: {
+        "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch entities: ${response.status}`);
+    }
+
+    const states = await response.json() as Array<{
+      entity_id: string;
+      state: string;
+      attributes?: { 
+        friendly_name?: string;
+        volume_level?: number;
+      };
+    }>;
+    const mediaPlayerStates = states.filter((state) =>
+      state.entity_id.startsWith("media_player.")
+    );
+
+    // Get area information for each media player
+    mediaPlayersCache = await Promise.all(
+      mediaPlayerStates.map(async (state) => {
+        const area = await getEntityArea(state.entity_id);
+        return {
+          entity_id: state.entity_id,
+          friendly_name: state.attributes?.friendly_name || state.entity_id,
+          area,
+          state: state.state,
+          volume: state.attributes?.volume_level,
+        };
+      }),
+    );
+    mediaPlayersCacheTime = now;
+
+    await logger.info("HA_API", "Successfully fetched media players from Home Assistant", { 
+      mediaPlayersCount: mediaPlayersCache.length 
+    });
+
+    return mediaPlayersCache;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("HA_API", "Failed to fetch media players", { error: errorMessage });
+    return mediaPlayersCache; // Return cached data if fetch fails
+  }
+}
+
 // Initialize caches on module load
 getAvailableLights();
 getAvailableClimateEntities();
+getAvailableMediaPlayers();
