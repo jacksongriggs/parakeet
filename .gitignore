@@ -4,6 +4,9 @@
 # Logs
 logs/
 
+# Generated entity snapshots
+ha_entities_*.txt
+
 # IDE
 .vscode/
 
