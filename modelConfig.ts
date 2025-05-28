@@ -175,6 +175,18 @@ export const MODELS: Record<string, ModelConfig> = {
       contextWindow: 1048576, // 1M tokens
     },
   },
+  "google/gemini-1.5-flash-8b": {
+    provider: "google",
+    model: "gemini-1.5-flash-8b",
+    apiKey: Deno.env.get("GOOGLE_API_KEY"),
+    description: "Previous generation fast Gemini model",
+    temperature: 0.1,
+    capabilities: {
+      streaming: true,
+      toolCalling: true,
+      contextWindow: 1048576, // 1M tokens
+    },
+  },
   "google/gemini-1.5-pro": {
     provider: "google",
     model: "gemini-1.5-pro",
@@ -205,7 +217,7 @@ export function getCheapestModel(): string {
     // Calculate average cost per token (average of input and output)
     const avgCost = (cost.input + cost.output) / 2;
     
-    if (avgCost < lowestCost && avgCost > 0) {
+    if (avgCost < lowestCost && avgCost >= 0) {
       lowestCost = avgCost;
       cheapestModelId = modelId;
     }

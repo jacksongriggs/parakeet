@@ -23,9 +23,10 @@ export const MODEL_COSTS: Record<string, ModelCost> = {
   // Google Gemini models (2025 pricing)
   "gemini-2.5-flash-preview-04-17": { input: 0.10, output: 0.40 }, // Gemini 2.5 Flash pricing
   "gemini-2.0-flash": { input: 0.10, output: 0.40 },
+  "gemini-1.5-flash-8b": { input: 0.0375, output: 0.15 },
   "gemini-1.5-flash": { input: 0.075, output: 0.30 }, // $0.075/1M input, $0.30/1M output
   "gemini-1.5-pro": { input: 1.25, output: 5.0 }, // Under 128k tokens
-  
+
   // Local models (no cost)
   "qwen3-1.7b": { input: 0, output: 0 },
   "depseek-r1-distill-qwen-7b": { input: 0, output: 0 },
