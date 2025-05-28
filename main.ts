@@ -209,6 +209,19 @@ async function parrot(): Promise<void> {
           const partialId = `${id}_partial_${Date.now()}`;
           if (lastPartialText && !processedUtteranceIds.has(id) && !processedUtteranceIds.has(partialId)) {
             const commandText = stripWakeWord(lastPartialText);
+            
+            // Skip processing if command is empty after stripping wake word
+            if (!commandText.trim()) {
+              await logger.info("VOICE", "Skipping partial timeout - no command after wake word", { 
+                originalText: lastPartialText,
+                strippedText: commandText,
+                channel,
+                timeoutMs: PARTIAL_TIMEOUT 
+              });
+              partialTimeout = null;
+              return;
+            }
+            
             await logger.info("VOICE", "Processing partial as final (timeout)", { 
               text: commandText, 
               channel,
