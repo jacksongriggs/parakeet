@@ -165,15 +165,17 @@ async function parrot(): Promise<void> {
       // Set timeout to process partial as final if no boundary arrives
       if (isAwake && USE_PARTIAL_RESULTS) {
         partialTimeout = setTimeout(async () => {
-          if (lastPartialText && !processedUtteranceIds.has(id)) {
+          const partialId = `${id}_partial_${Date.now()}`;
+          if (lastPartialText && !processedUtteranceIds.has(id) && !processedUtteranceIds.has(partialId)) {
             await logger.info("VOICE", "Processing partial as final (timeout)", { 
               text: lastPartialText, 
               channel,
               timeoutMs: PARTIAL_TIMEOUT 
             });
             
-            // Mark as processed to avoid duplicates
+            // Mark both IDs as processed to avoid duplicates
             processedUtteranceIds.add(id);
+            processedUtteranceIds.add(partialId);
             
             // Process as a command
             abort();
