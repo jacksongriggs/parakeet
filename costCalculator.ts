@@ -12,6 +12,38 @@ export interface UsageData {
   totalTokens: number;
 }
 
+export interface FreeTierLimits {
+  requestsPerMinute: number;
+  requestsPerDay: number;
+}
+
+export interface RequestTracker {
+  requestsThisMinute: number;
+  requestsToday: number;
+  lastMinuteReset: number;
+  lastDayReset: number;
+}
+
+export interface SessionCosts {
+  totalCost: number;
+  totalTokens: number;
+  requestCount: number;
+  modelBreakdown: Record<string, {
+    cost: number;
+    tokens: number;
+    requests: number;
+  }>;
+}
+
+export const FREE_TIER_LIMITS: Record<string, FreeTierLimits> = {
+  // Google Gemini free tier limits
+  "gemini-2.5-flash-preview-04-17": { requestsPerMinute: 15, requestsPerDay: 1500 },
+  "gemini-2.0-flash": { requestsPerMinute: 15, requestsPerDay: 1500 },
+  "gemini-1.5-flash-8b": { requestsPerMinute: 15, requestsPerDay: 1500 },
+  "gemini-1.5-flash": { requestsPerMinute: 15, requestsPerDay: 1500 },
+  "gemini-1.5-pro": { requestsPerMinute: 2, requestsPerDay: 50 },
+};
+
 export const MODEL_COSTS: Record<string, ModelCost> = {
   // OpenAI models (costs from console.ai/models.ts)
   "gpt-4.1": { input: 2, output: 8 },
@@ -34,7 +66,64 @@ export const MODEL_COSTS: Record<string, ModelCost> = {
   "mistralai/mistral-nemo-instruct-2407": { input: 0, output: 0 },
 };
 
-export function calculateCost(modelName: string, usage: UsageData): {
+// Global request tracker
+const requestTracker: RequestTracker = {
+  requestsThisMinute: 0,
+  requestsToday: 0,
+  lastMinuteReset: Date.now(),
+  lastDayReset: Date.now()
+};
+
+// Session cost tracking
+const sessionCosts: SessionCosts = {
+  totalCost: 0,
+  totalTokens: 0,
+  requestCount: 0,
+  modelBreakdown: {}
+};
+
+export function trackRequest(modelName: string): {
+  withinFreeTier: boolean;
+  requestsThisMinute: number;
+  requestsToday: number;
+  minuteLimit?: number;
+  dayLimit?: number;
+} {
+  const now = Date.now();
+  const freeLimits = FREE_TIER_LIMITS[modelName];
+  
+  // Reset counters if needed
+  if (now - requestTracker.lastMinuteReset >= 60000) {
+    requestTracker.requestsThisMinute = 0;
+    requestTracker.lastMinuteReset = now;
+  }
+  
+  if (now - requestTracker.lastDayReset >= 86400000) {
+    requestTracker.requestsToday = 0;
+    requestTracker.lastDayReset = now;
+  }
+  
+  // Increment counters
+  requestTracker.requestsThisMinute++;
+  requestTracker.requestsToday++;
+  
+  // Check if within free tier
+  let withinFreeTier = true;
+  if (freeLimits) {
+    withinFreeTier = requestTracker.requestsThisMinute <= freeLimits.requestsPerMinute &&
+                     requestTracker.requestsToday <= freeLimits.requestsPerDay;
+  }
+  
+  return {
+    withinFreeTier,
+    requestsThisMinute: requestTracker.requestsThisMinute,
+    requestsToday: requestTracker.requestsToday,
+    minuteLimit: freeLimits?.requestsPerMinute,
+    dayLimit: freeLimits?.requestsPerDay
+  };
+}
+
+export function calculateCost(modelName: string, usage: UsageData, withinFreeTier?: boolean): {
   inputCost: number;
   outputCost: number;
   totalCost: number;
@@ -49,6 +138,16 @@ export function calculateCost(modelName: string, usage: UsageData): {
       outputCost: 0,
       totalCost: 0,
       formattedCost: "Unknown model cost"
+    };
+  }
+  
+  // If within free tier for models that have free tier limits, cost is $0
+  if (withinFreeTier && FREE_TIER_LIMITS[modelName]) {
+    return {
+      inputCost: 0,
+      outputCost: 0,
+      totalCost: 0,
+      formattedCost: "Free (within limits)"
     };
   }
   
@@ -75,11 +174,65 @@ export function calculateCost(modelName: string, usage: UsageData): {
   };
 }
 
-export function formatUsageWithCost(modelName: string, usage: UsageData): string {
-  const cost = calculateCost(modelName, usage);
+export function addToSessionCosts(modelName: string, usage: UsageData, actualCost: number) {
+  sessionCosts.totalCost += actualCost;
+  sessionCosts.totalTokens += usage.totalTokens;
+  sessionCosts.requestCount++;
+  
+  if (!sessionCosts.modelBreakdown[modelName]) {
+    sessionCosts.modelBreakdown[modelName] = {
+      cost: 0,
+      tokens: 0,
+      requests: 0
+    };
+  }
+  
+  sessionCosts.modelBreakdown[modelName].cost += actualCost;
+  sessionCosts.modelBreakdown[modelName].tokens += usage.totalTokens;
+  sessionCosts.modelBreakdown[modelName].requests++;
+}
+
+export function getSessionCosts(): SessionCosts {
+  return { ...sessionCosts };
+}
+
+export function formatSessionSummary(): string {
+  if (sessionCosts.requestCount === 0) {
+    return "No requests made this session";
+  }
+  
+  const costStr = sessionCosts.totalCost === 0 ? "Free" : 
+    sessionCosts.totalCost < 0.01 ? `$${(sessionCosts.totalCost * 100).toFixed(3)}¢` :
+    `$${sessionCosts.totalCost.toFixed(4)}`;
+  
+  return `Session: ${sessionCosts.requestCount} requests, ${sessionCosts.totalTokens} tokens, ${costStr} total`;
+}
+
+export function formatUsageWithCost(modelName: string, usage: UsageData, trackRequests = true): string {
+  let tracking;
+  if (trackRequests) {
+    tracking = trackRequest(modelName);
+  }
+  
+  const cost = calculateCost(modelName, usage, tracking?.withinFreeTier);
+  
+  // Add to session costs
+  addToSessionCosts(modelName, usage, cost.totalCost);
+  
+  let requestInfo = "";
+  
+  if (trackRequests && tracking) {
+    if (tracking.minuteLimit && tracking.dayLimit) {
+      const freeTierStatus = tracking.withinFreeTier ? "✓ Free tier" : "⚠ Paid tier";
+      requestInfo = ` | ${freeTierStatus} (${tracking.requestsThisMinute}/${tracking.minuteLimit}/min, ${tracking.requestsToday}/${tracking.dayLimit}/day)`;
+    }
+  }
+  
+  // Add session summary
+  const sessionSummary = ` | ${formatSessionSummary()}`;
   
   if (cost.totalCost === 0) {
-    return `Tokens: ${usage.promptTokens} in, ${usage.completionTokens} out (${usage.totalTokens} total) | Cost: ${cost.formattedCost}`;
+    return `Tokens: ${usage.promptTokens} in, ${usage.completionTokens} out (${usage.totalTokens} total) | Cost: ${cost.formattedCost}${requestInfo}${sessionSummary}`;
   }
   
   // Format individual costs
@@ -98,5 +251,5 @@ export function formatUsageWithCost(modelName: string, usage: UsageData): string
     outputCostStr = `$${cost.outputCost.toFixed(4)}`;
   }
   
-  return `Tokens: ${usage.promptTokens} in (${inputCostStr}), ${usage.completionTokens} out (${outputCostStr}) | Total: ${usage.totalTokens} tokens, ${cost.formattedCost}`;
+  return `Tokens: ${usage.promptTokens} in (${inputCostStr}), ${usage.completionTokens} out (${outputCostStr}) | Total: ${usage.totalTokens} tokens, ${cost.formattedCost}${requestInfo}${sessionSummary}`;
 }
