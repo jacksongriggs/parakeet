@@ -33,6 +33,64 @@ async function getEntityArea(entityId: string): Promise<string | undefined> {
   }
 }
 
+export async function getAllEntities(domainFilter?: string) {
+  try {
+    await logger.info("HA_API", "Getting all entities from Home Assistant", { domainFilter });
+    
+    const response = await fetch(`${HOME_ASSISTANT_URL}/api/states`, {
+      headers: {
+        "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch entities: ${response.status}`);
+    }
+
+    const states = await response.json() as Array<{
+      entity_id: string;
+      state: string;
+      attributes?: { 
+        friendly_name?: string;
+        [key: string]: unknown;
+      };
+    }>;
+
+    // Filter by domain if specified
+    const filteredStates = domainFilter 
+      ? states.filter(state => state.entity_id.startsWith(`${domainFilter}.`))
+      : states;
+
+    // Group entities by domain
+    const entitiesByDomain: Record<string, Array<{entity_id: string, friendly_name: string, state: string}>> = {};
+    
+    for (const state of filteredStates) {
+      const entityDomain = state.entity_id.split('.')[0];
+      if (!entitiesByDomain[entityDomain]) {
+        entitiesByDomain[entityDomain] = [];
+      }
+      
+      entitiesByDomain[entityDomain].push({
+        entity_id: state.entity_id,
+        friendly_name: state.attributes?.friendly_name || state.entity_id,
+        state: state.state
+      });
+    }
+
+    return {
+      totalEntities: filteredStates.length,
+      domainCount: Object.keys(entitiesByDomain).length,
+      domains: Object.keys(entitiesByDomain).sort(),
+      entitiesByDomain
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("HA_API", "Failed to get all entities", { error: errorMessage });
+    throw error;
+  }
+}
+
 export async function callHomeAssistantService(
   domain: string,
   service: string,

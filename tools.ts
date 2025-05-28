@@ -2,10 +2,9 @@
 
 import { Tool } from "ai";
 import { z } from "zod";
-import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, supportsColorControl, supportsTemperatureControl } from "./homeAssistant.ts";
+import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl } from "./homeAssistant.ts";
 import type { ClimateEntity } from "./types.ts";
 import { logger } from "./logger.ts";
-import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN } from "./config.ts";
 
 // Color temperature mappings (in Kelvin)
 const colorTemperatureMap: Record<string, number> = {
@@ -210,46 +209,8 @@ export const tools: Record<string, Tool> = {
       await logger.info("TOOL", "Getting all entities from Home Assistant", { domain });
       
       try {
-        const response = await fetch(`${HOME_ASSISTANT_URL}/api/states`, {
-          headers: {
-            "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch entities: ${response.status}`);
-        }
-
-        const states = await response.json() as Array<{
-          entity_id: string;
-          state: string;
-          attributes?: { 
-            friendly_name?: string;
-            [key: string]: unknown;
-          };
-        }>;
-
-        // Filter by domain if specified
-        const filteredStates = domain 
-          ? states.filter(state => state.entity_id.startsWith(`${domain}.`))
-          : states;
-
-        // Group entities by domain
-        const entitiesByDomain: Record<string, Array<{entity_id: string, friendly_name: string, state: string}>> = {};
-        
-        for (const state of filteredStates) {
-          const entityDomain = state.entity_id.split('.')[0];
-          if (!entitiesByDomain[entityDomain]) {
-            entitiesByDomain[entityDomain] = [];
-          }
-          
-          entitiesByDomain[entityDomain].push({
-            entity_id: state.entity_id,
-            friendly_name: state.attributes?.friendly_name || state.entity_id,
-            state: state.state
-          });
-        }
+        const result = await getAllEntities(domain);
+        const { totalEntities, domainCount, domains, entitiesByDomain } = result;
 
         // Log detailed information
         const summary = Object.entries(entitiesByDomain).map(([domainName, entities]) => {
@@ -258,9 +219,9 @@ export const tools: Record<string, Tool> = {
         }).join('\n\n');
 
         await logger.info("HA_DISCOVERY", "Complete Home Assistant entity inventory", { 
-          totalEntities: filteredStates.length,
-          domainCount: Object.keys(entitiesByDomain).length,
-          domains: Object.keys(entitiesByDomain).sort(),
+          totalEntities,
+          domainCount,
+          domains,
           filteredBy: domain || "none"
         });
 
@@ -268,10 +229,10 @@ export const tools: Record<string, Tool> = {
         await logger.info("HA_DISCOVERY", "Entity breakdown by domain", { summary });
 
         const domainCounts = Object.entries(entitiesByDomain)
-          .map(([domain, entities]) => `${domain}: ${entities.length}`)
+          .map(([domainName, entities]) => `${domainName}: ${entities.length}`)
           .join(', ');
 
-        return `Found ${filteredStates.length} entities across ${Object.keys(entitiesByDomain).length} domains${domain ? ` (filtered by ${domain})` : ''}:\n\n${summary}\n\nDomain summary: ${domainCounts}`;
+        return `Found ${totalEntities} entities across ${domainCount} domains${domain ? ` (filtered by ${domain})` : ''}:\n\n${summary}\n\nDomain summary: ${domainCounts}`;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "Failed to get all entities", { error: errorMessage });
