@@ -5,6 +5,7 @@ import { z } from "zod";
 import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, supportsColorControl, supportsTemperatureControl } from "./homeAssistant.ts";
 import type { ClimateEntity } from "./types.ts";
 import { logger } from "./logger.ts";
+import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN } from "./config.ts";
 
 // Color temperature mappings (in Kelvin)
 const colorTemperatureMap: Record<string, number> = {
@@ -200,6 +201,84 @@ const z_setLightState = z.object({
 });
 
 export const tools: Record<string, Tool> = {
+  getAllEntities: {
+    description: "Get all entities from Home Assistant to explore what devices are available",
+    parameters: z.object({
+      domain: z.string().optional().describe("Optional domain filter (e.g., 'media_player', 'switch', 'sensor'). If not provided, returns all entities"),
+    }),
+    execute: async ({ domain }) => {
+      await logger.info("TOOL", "Getting all entities from Home Assistant", { domain });
+      
+      try {
+        const response = await fetch(`${HOME_ASSISTANT_URL}/api/states`, {
+          headers: {
+            "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch entities: ${response.status}`);
+        }
+
+        const states = await response.json() as Array<{
+          entity_id: string;
+          state: string;
+          attributes?: { 
+            friendly_name?: string;
+            [key: string]: unknown;
+          };
+        }>;
+
+        // Filter by domain if specified
+        const filteredStates = domain 
+          ? states.filter(state => state.entity_id.startsWith(`${domain}.`))
+          : states;
+
+        // Group entities by domain
+        const entitiesByDomain: Record<string, Array<{entity_id: string, friendly_name: string, state: string}>> = {};
+        
+        for (const state of filteredStates) {
+          const entityDomain = state.entity_id.split('.')[0];
+          if (!entitiesByDomain[entityDomain]) {
+            entitiesByDomain[entityDomain] = [];
+          }
+          
+          entitiesByDomain[entityDomain].push({
+            entity_id: state.entity_id,
+            friendly_name: state.attributes?.friendly_name || state.entity_id,
+            state: state.state
+          });
+        }
+
+        // Log detailed information
+        const summary = Object.entries(entitiesByDomain).map(([domainName, entities]) => {
+          const entityList = entities.map(e => `  - ${e.friendly_name} (${e.entity_id}) [${e.state}]`).join('\n');
+          return `${domainName.toUpperCase()} (${entities.length} entities):\n${entityList}`;
+        }).join('\n\n');
+
+        await logger.info("HA_DISCOVERY", "Complete Home Assistant entity inventory", { 
+          totalEntities: filteredStates.length,
+          domainCount: Object.keys(entitiesByDomain).length,
+          domains: Object.keys(entitiesByDomain).sort(),
+          filteredBy: domain || "none"
+        });
+
+        // Log the full breakdown
+        await logger.info("HA_DISCOVERY", "Entity breakdown by domain", { summary });
+
+        const domainCounts = Object.entries(entitiesByDomain)
+          .map(([domain, entities]) => `${domain}: ${entities.length}`)
+          .join(', ');
+
+        return `Found ${filteredStates.length} entities across ${Object.keys(entitiesByDomain).length} domains${domain ? ` (filtered by ${domain})` : ''}:\n\n${summary}\n\nDomain summary: ${domainCounts}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to get all entities", { error: errorMessage });
+        return `Failed to fetch entities: ${errorMessage}`;
+      }
+    },
+  },
   noActionRequired: {
     description:
       "Take no action (e.g. if the user has not requested anything within your capability)",
@@ -542,6 +621,41 @@ export const tools: Record<string, Tool> = {
       return `${area} area: ${result}`;
     },
   },
+  setClimateState: {
+    description: "Turn climate entities (thermostats, HVAC) on or off",
+    parameters: z.object({
+      entity: z.string().describe("The entity_id of the climate entity"),
+      state: z.enum(["on", "off", "heat", "cool", "auto", "heat_cool"]).describe("State to set: on/off or specific HVAC mode"),
+    }),
+    execute: async ({ entity, state }) => {
+      await logger.info("TOOL", "Setting climate state", { entity, state });
+      
+      try {
+        const entity_id = entity.includes(".") ? entity : `climate.${entity}`;
+        
+        let service: string;
+        let serviceData: Record<string, string | number> = { entity_id };
+        
+        if (state === "on") {
+          service = "turn_on";
+        } else if (state === "off") {
+          service = "turn_off";
+        } else {
+          service = "set_hvac_mode";
+          serviceData.hvac_mode = state;
+        }
+        
+        await callHomeAssistantService("climate", service, serviceData);
+        
+        await logger.debug("TOOL", "Climate state control successful", { entity_id, state });
+        return `Successfully turned ${entity_id} ${state}.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Climate state control failed", { entity, error: errorMessage });
+        return `Failed to set state for ${entity}: ${errorMessage}`;
+      }
+    },
+  },
   setTemperature: {
     description: "Set temperature for climate entities (thermostats, HVAC)",
     parameters: z.object({
@@ -616,6 +730,109 @@ export const tools: Record<string, Tool> = {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "Area temperature control failed", { area, error: errorMessage });
         return `Failed to control temperature in ${area}: ${errorMessage}`;
+      }
+    },
+  },
+  setAreaClimateState: {
+    description: "Turn climate entities in an area on or off or set HVAC mode",
+    parameters: z.object({
+      area: z.string().describe("The area/room name to control"),
+      state: z.enum(["on", "off", "heat", "cool", "auto", "heat_cool"]).describe("State to set: on/off or specific HVAC mode"),
+    }),
+    execute: async ({ area, state }) => {
+      await logger.info("TOOL", "Setting area climate state", { area, state });
+      
+      try {
+        const climateEntities = await getAvailableClimateEntities();
+        const areaClimate = climateEntities.filter((e: ClimateEntity) =>
+          e.area?.toLowerCase().includes(area.toLowerCase())
+        );
+        
+        if (areaClimate.length === 0) {
+          return `No climate entities found in the "${area}" area.`;
+        }
+        
+        const promises = areaClimate.map(async (entity: ClimateEntity) => {
+          try {
+            let service: string;
+            let serviceData: Record<string, string | number> = { entity_id: entity.entity_id };
+            
+            if (state === "on") {
+              service = "turn_on";
+            } else if (state === "off") {
+              service = "turn_off";
+            } else {
+              service = "set_hvac_mode";
+              serviceData.hvac_mode = state;
+            }
+            
+            await callHomeAssistantService("climate", service, serviceData);
+            return { success: true, entity_id: entity.entity_id };
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            await logger.error("TOOL", "Climate control failed", { entity_id: entity.entity_id, error: errorMessage });
+            return { success: false, entity_id: entity.entity_id, error: errorMessage };
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        const successes = results.filter((r: { success: boolean; entity_id: string }) => r.success).map((r: { entity_id: string }) => r.entity_id);
+        const failures = results.filter((r: { success: boolean; entity_id: string; error?: string }) => !r.success).map((r: { entity_id: string; error?: string }) => `${r.entity_id}: ${r.error}`);
+        
+        if (successes.length > 0 && failures.length === 0) {
+          return `Successfully turned ${successes.join(", ")} ${state} in ${area} area.`;
+        } else if (successes.length > 0 && failures.length > 0) {
+          return `Turned ${successes.join(", ")} ${state}. Failed to control: ${failures.join("; ")}`;
+        } else {
+          return `Failed to control climate entities in ${area}: ${failures.join("; ")}`;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Area climate state control failed", { area, error: errorMessage });
+        return `Failed to control climate state in ${area}: ${errorMessage}`;
+      }
+    },
+  },
+  turnOffAllClimates: {
+    description: "Turn off all climate entities in the home",
+    parameters: z.object({}),
+    execute: async () => {
+      await logger.info("TOOL", "Turning off all climates");
+      
+      try {
+        const climateEntities = await getAvailableClimateEntities();
+        
+        if (climateEntities.length === 0) {
+          await logger.warn("TOOL", "No climate entities found");
+          return "No climate entities found in your Home Assistant instance.";
+        }
+        
+        const promises = climateEntities.map(async (entity: ClimateEntity) => {
+          try {
+            await callHomeAssistantService("climate", "turn_off", {
+              entity_id: entity.entity_id,
+            });
+            return { success: true, entity_id: entity.entity_id };
+          } catch (error) {
+            return { success: false, entity_id: entity.entity_id, error: error instanceof Error ? error.message : String(error) };
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        const successes = results.filter((r: { success: boolean; entity_id: string }) => r.success).map((r: { entity_id: string }) => r.entity_id);
+        const failures = results.filter((r: { success: boolean; entity_id: string; error?: string }) => !r.success).map((r: { entity_id: string; error?: string }) => `${r.entity_id}: ${r.error}`);
+        
+        if (successes.length > 0 && failures.length === 0) {
+          return `Successfully turned off all ${successes.length} climate entities.`;
+        } else if (successes.length > 0 && failures.length > 0) {
+          return `Turned off ${successes.join(", ")}. Failed to control: ${failures.join("; ")}`;
+        } else {
+          return `Failed to turn off all climate entities: ${failures.join("; ")}`;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to turn off all climates", { error: errorMessage });
+        return `Failed to turn off all climates: ${errorMessage}`;
       }
     },
   },
