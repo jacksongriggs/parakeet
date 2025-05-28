@@ -3,13 +3,24 @@ import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT_
 import { abort, analyse } from "./ai.ts";
 import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
+import { getActiveModelConfig, listAvailableModels } from "./modelConfig.ts";
 
 await logger.sessionStart();
 
+// Show model configuration
+const modelConfig = getActiveModelConfig();
 await logger.info("CONFIG", "Environment configuration", {
   HOME_ASSISTANT_URL,
-  HOME_ASSISTANT_TOKEN: HOME_ASSISTANT_TOKEN ? "Token is set" : "Token is empty"
+  HOME_ASSISTANT_TOKEN: HOME_ASSISTANT_TOKEN ? "Token is set" : "Token is empty",
+  AI_MODEL: `${modelConfig.provider}/${modelConfig.model}`,
+  MODEL_DESCRIPTION: modelConfig.description
 });
+
+// Show available models if requested
+if (Deno.args.includes("--list-models")) {
+  listAvailableModels();
+  Deno.exit(0);
+}
 
 
 async function parrot(): Promise<void> {
