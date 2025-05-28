@@ -156,15 +156,34 @@ export const tools: Record<string, Tool> = {
       // Normalize to array
       const lightArray = Array.isArray(lights) ? lights : [lights];
 
+      // Get available lights and validate entities exist
+      const availableLights = await getAvailableLights();
+      const availableEntityIds = new Set(availableLights.map(l => l.entity_id));
+      
+      // Filter out non-existent entities
+      const validLights = lightArray.filter(light => {
+        const entity_id = light.includes(".") ? light : `light.${light}`;
+        const exists = availableEntityIds.has(entity_id);
+        if (!exists) {
+          logger.warn("TOOL", "Skipping non-existent light entity", { entity_id });
+        }
+        return exists;
+      });
+
+      if (validLights.length === 0) {
+        await logger.warn("TOOL", "No valid lights found", { requested: lightArray });
+        return "No valid lights found to control.";
+      }
+
       await logger.info("TOOL", "Setting light state", { 
-        lights: lightArray, 
+        lights: validLights, 
         state, 
         brightness, 
         color 
       });
 
       await logger.info("TOOL", "Setting light state", {
-        lights: lightArray,
+        lights: validLights,
         state,
         brightness,
         color,
@@ -172,7 +191,7 @@ export const tools: Record<string, Tool> = {
       });
 
       // Create promises for all light operations
-      const promises = lightArray.map(async (light) => {
+      const promises = validLights.map(async (light) => {
         try {
           // Ensure entity_id has proper format
           const entity_id = light.includes(".") ? light : `light.${light}`;
@@ -463,8 +482,27 @@ export const tools: Record<string, Tool> = {
       // Normalize to array
       const lightArray = Array.isArray(lights) ? lights : [lights];
       
+      // Get available lights and validate entities exist
+      const availableLights = await getAvailableLights();
+      const availableEntityIds = new Set(availableLights.map(l => l.entity_id));
+      
+      // Filter out non-existent entities
+      const validLights = lightArray.filter(light => {
+        const entity_id = light.includes(".") ? light : `light.${light}`;
+        const exists = availableEntityIds.has(entity_id);
+        if (!exists) {
+          logger.warn("TOOL", "Skipping non-existent light entity", { entity_id });
+        }
+        return exists;
+      });
+
+      if (validLights.length === 0) {
+        await logger.warn("TOOL", "No valid lights found", { requested: lightArray });
+        return "No valid lights found to control.";
+      }
+      
       // Create promises for all light operations
-      const promises = lightArray.map(async (light) => {
+      const promises = validLights.map(async (light) => {
         try {
           const entity_id = light.includes(".") ? light : `light.${light}`;
           
@@ -613,6 +651,51 @@ export const tools: Record<string, Tool> = {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "Area temperature control failed", { area, error: errorMessage });
         return `Failed to control temperature in ${area}: ${errorMessage}`;
+      }
+    },
+  },
+  setAllClimates: {
+    description: "Set temperature for all climate entities in the home",
+    parameters: z.object({
+      temperature: z.number().min(10).max(35).describe("Target temperature in Celsius"),
+    }),
+    execute: async ({ temperature }) => {
+      await logger.info("TOOL", "Setting all climates temperature", { temperature });
+      
+      try {
+        const climateEntities = await getAvailableClimateEntities();
+        
+        if (climateEntities.length === 0) {
+          return "No climate entities found in the home.";
+        }
+        
+        const promises = climateEntities.map(async (entity: ClimateEntity) => {
+          try {
+            await callHomeAssistantService("climate", "set_temperature", {
+              entity_id: entity.entity_id,
+              temperature: temperature,
+            });
+            return { success: true, entity_id: entity.entity_id };
+          } catch (error) {
+            return { success: false, entity_id: entity.entity_id, error: error instanceof Error ? error.message : String(error) };
+          }
+        });
+        
+        const results = await Promise.all(promises);
+        const successes = results.filter((r: { success: boolean; entity_id: string }) => r.success).map((r: { entity_id: string }) => r.entity_id);
+        const failures = results.filter((r: { success: boolean; entity_id: string; error?: string }) => !r.success).map((r: { entity_id: string; error?: string }) => `${r.entity_id}: ${r.error}`);
+        
+        if (successes.length > 0 && failures.length === 0) {
+          return `Successfully set all ${successes.length} climate entities to ${temperature}°C.`;
+        } else if (successes.length > 0 && failures.length > 0) {
+          return `Set ${successes.length} climate entities to ${temperature}°C. Failed to control: ${failures.join("; ")}`;
+        } else {
+          return `Failed to control all climate entities: ${failures.join("; ")}`;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "All climates control failed", { error: errorMessage });
+        return `Failed to control all climates: ${errorMessage}`;
       }
     },
   },
