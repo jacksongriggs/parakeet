@@ -12,7 +12,7 @@ import {
   TTS_MODEL, 
   TTS_INSTRUCTIONS 
 } from "./config.ts";
-import { addTTSToSessionCosts, type TTSUsage } from "./costCalculator.ts";
+import { addTTSToSessionCosts, calculateTTSCost, type TTSUsage } from "./costCalculator.ts";
 
 // Initialize TTS components as singletons
 let speaker: Speaker | null = null;
@@ -78,13 +78,16 @@ export async function speak(text: string, signal?: AbortSignal): Promise<void> {
       estimatedMinutes: actualMinutes
     };
     
-    // Add to session costs
+    // Add to session costs and get formatted cost
+    const { cost, formattedCost } = calculateTTSCost(TTS_MODEL, ttsUsage);
     addTTSToSessionCosts(TTS_MODEL, ttsUsage);
-    logger.debug("TTS", "TTS cost tracked", { 
+    
+    logger.info("TTS", "Speech generated", { 
       model: TTS_MODEL,
       characters: text.length,
       actualDuration: audio.duration ? `${audio.duration.toFixed(2)}s` : "estimated",
       actualMinutes: actualMinutes.toFixed(3),
+      cost: formattedCost,
       audioSize: audio.size || "unknown"
     });
     
