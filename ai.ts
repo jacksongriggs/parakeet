@@ -63,17 +63,14 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
   });
 
   // Keep only last 10 messages to prevent context overflow
-  if (conversationHistory.length > 20) {
-    conversationHistory = conversationHistory.slice(-20);
+  if (conversationHistory.length > 10) {
+    conversationHistory = conversationHistory.slice(-10);
     await logger.debug("AI", "Trimmed conversation history", { newLength: conversationHistory.length });
   }
 
-  // Get available lights
+  // Get available lights - only entity IDs to reduce tokens
   const lights = await getAvailableLights();
-  const lightsList = lights.map((l) => {
-    const areaInfo = l.area ? ` in ${l.area}` : "";
-    return `- ${l.friendly_name} (${l.entity_id})${areaInfo}`;
-  }).join("\n");
+  const lightsList = lights.map(l => l.entity_id).join(", ");
 
   try {
     const modelConfig = getActiveModelConfig();
@@ -86,10 +83,10 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
     const { textStream } = streamText({
       model: getAIModel(modelConfig),
       messages: [
-        // Few-shot examples
+        // Single few-shot example
         {
           role: "user" as const,
-          content: "turn on the kitchen lights",
+          content: "turn on kitchen lights",
         },
         {
           role: "assistant" as const,
@@ -113,102 +110,6 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
               type: "tool-result" as const,
               toolCallId: "example1",
               toolName: "setLightStateByArea",
-              result: { success: true },
-            },
-          ],
-        },
-        {
-          role: "user" as const,
-          content: "all lights off",
-        },
-        {
-          role: "assistant" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: "Turning off all lights.",
-            },
-            {
-              type: "tool-call" as const,
-              toolCallId: "example2",
-              toolName: "setLightState",
-              args: {
-                lights: ["light.dimmable_light_4", "light.dimmable_light_5", "light.dimmable_light_6", "light.dimmable_light_7", "light.dimmable_light_8"],
-                state: "off",
-              },
-            },
-          ],
-        },
-        {
-          role: "tool" as const,
-          content: [
-            {
-              type: "tool-result" as const,
-              toolCallId: "example2",
-              toolName: "setLightState",
-              result: { success: true },
-            },
-          ],
-        },
-        {
-          role: "user" as const,
-          content: "dim the bedroom to 30%",
-        },
-        {
-          role: "assistant" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: "Dimming bedroom lights to 30%.",
-            },
-            {
-              type: "tool-call" as const,
-              toolCallId: "example3",
-              toolName: "setLightStateByArea",
-              args: { area: "bedroom", brightness: 30 },
-            },
-          ],
-        },
-        {
-          role: "tool" as const,
-          content: [
-            {
-              type: "tool-result" as const,
-              toolCallId: "example3",
-              toolName: "setLightStateByArea",
-              result: { success: true },
-            },
-          ],
-        },
-        {
-          role: "user" as const,
-          content: "goodnight",
-        },
-        {
-          role: "assistant" as const,
-          content: [
-            {
-              type: "text" as const,
-              text: "Goodnight! Turning off all lights.",
-            },
-            {
-              type: "tool-call" as const,
-              toolCallId: "example4",
-              toolName: "setLightState",
-              args: {
-                lights: ["light.dimmable_light_4", "light.dimmable_light_5", "light.dimmable_light_6", "light.dimmable_light_7", "light.dimmable_light_8"],
-                state: "off",
-              },
-            },
-          ],
-        },
-        {
-          role: "tool" as const,
-          content: [
-            {
-              type: "tool-result" as const,
-              toolCallId: "example4",
-              toolName: "setLightState",
               result: { success: true },
             },
           ],
@@ -241,24 +142,7 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
         },
       ],
       system:
-        `You are a Home Assistant voice control assistant. Respond naturally but concisely to commands. Use exact entity_ids from list, never friendly names.
-
-RULES:
-- Use entity_id (e.g. "light.dimmable_light_4") not friendly names ("Pendant 1")
-- "all X" = find EVERY matching light in full list
-- Always use tools for device control
-- Light control: setLightState (individual/multiple) or setLightStateByArea (area-based)
-- Climate control: setTemperature (individual) or setAreaTemperature (area-based)
-- Light color temp: setLightTemperature or setAreaLightTemperature (warm/cool/daylight)
-- Respond conversationally but briefly (1-2 sentences max)
-- Confirm what you're doing in simple terms
-- You MUST call a tool if it is possible to do so.
-
-Available lights:
-${lightsList || "(No lights detected)"}
-
-Common mappings:
-Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
+        `Home Assistant voice control. Use entity_ids: ${lightsList || "none"}. Tools: setLightState, setLightStateByArea, setTemperature, setAreaTemperature, setLightTemperature, setAreaLightTemperature. Always use tools for control. Brief responses.`,
       abortSignal: abortController.signal,
       tools,
       maxSteps: 5,
