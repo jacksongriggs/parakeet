@@ -128,6 +128,8 @@ RULES:
 - Light control: setLightState (individual/multiple) or setLightStateByArea (area-based)
 - Climate control: setTemperature (individual) or setAreaTemperature (area-based)
 - Light color temp: setLightTemperature or setAreaLightTemperature (warm/cool/daylight)
+- Don't think too hard about it - the requests are usually pretty simple so don't second guess yourself.
+- You should aim to respond as quickly as possible, and you can do this by saying as little as possible.
 
 Available lights:
 ${lightsList || "(No lights detected)"}
