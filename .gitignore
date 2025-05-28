@@ -1,0 +1,11 @@
+# Environment variables
+.env
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+
+# macOS
+.DS_Store
