@@ -1,9 +1,11 @@
 // Type definitions and interfaces
 
 export interface Message {
-  role: "user" | "assistant";
-  content: string;
+  role: "user" | "assistant" | "tool";
+  content: string | any[];
   timestamp: Date;
+  toolCalls?: any[];
+  toolResults?: any[];
 }
 
 export interface Light {

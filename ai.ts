@@ -1,15 +1,41 @@
 // AI and OpenAI functionality
-
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, Tool } from "ai";
-import { OPENAI_API_KEY, BASE_URL, MODEL } from "./config.ts";
+import { streamText, Tool, LanguageModel, CoreToolMessage, CoreAssistantMessage } from "ai";
 import { getAvailableLights } from "./homeAssistant.ts";
 import type { Message } from "./types.ts";
 import { logger } from "./logger.ts";
+import { getActiveModelConfig, type ModelConfig } from "./modelConfig.ts";
 
-export const openai = createOpenAI({ apiKey: OPENAI_API_KEY, baseURL: BASE_URL });
 export const encoder = new TextEncoder();
 export let abortController = new AbortController();
+
+// Get the AI model instance based on configuration
+function getAIModel(config: ModelConfig): LanguageModel {
+  switch (config.provider) {
+    case "openai": {
+      const openai = createOpenAI({ 
+        apiKey: config.apiKey,
+        baseURL: config.baseURL, // Only used for custom endpoints
+      });
+      return openai(config.model);
+    }
+    case "google": {
+      const google = createGoogleGenerativeAI({ apiKey: config.apiKey! });
+      return google(config.model);
+    }
+    case "local": {
+      // Local models use OpenAI-compatible API
+      const localAI = createOpenAI({ 
+        apiKey: config.apiKey || "",
+        baseURL: config.baseURL!,
+      });
+      return localAI(config.model);
+    }
+    default:
+      throw new Error(`Unsupported provider: ${config.provider}`);
+  }
+}
 
 // Conversation history
 export let conversationHistory: Message[] = [];
@@ -48,78 +74,172 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
   }).join("\n");
 
   try {
-    await logger.debug("AI", "Calling AI model", { model: MODEL, lightsCount: lights.length });
+    const modelConfig = getActiveModelConfig();
+    await logger.debug("AI", "Calling AI model", { 
+      provider: modelConfig.provider,
+      model: modelConfig.model, 
+      lightsCount: lights.length 
+    });
     
     const { textStream } = streamText({
-      model: openai(MODEL),
-      //       experimental_repairToolCall: async ({ toolCall, error }) => {
-      //         // Use LLM to repair the tool call based on the error and expected schema
-      //         const tool = tools[toolCall.toolName];
-      //         if (!tool) return null;
-
-      //         try {
-      //           // Get the expected schema for this tool
-      //           const schemaDescription = tool.parameters.describe
-      //             ? tool.parameters.describe()
-      //             : JSON.stringify(tool.parameters, null, 2);
-
-      //           const { text: repairedArgs } = await generateText({
-      //             model: openai(MODEL),
-      //             messages: [
-      //               {
-      //                 role: 'system',
-      //                 content: `You are a tool argument repair assistant. Fix the malformed tool arguments to match the expected schema.
-
-      // Tool: ${toolCall.toolName}
-      // Expected Schema: ${schemaDescription}
-      // Error: ${error}
-
-      // Return ONLY a valid JSON object that matches the schema. Do not include any explanation or markdown.`
-      //               },
-      //               {
-      //                 role: 'user',
-      //                 content: `Current malformed arguments: ${toolCall.args}
-
-      // Fix these arguments to match the expected schema. Return only the corrected JSON.`
-      //               }
-      //             ],
-      //             temperature: 0.1,
-      //             maxTokens: 200,
-      //           });
-
-      //           // Strip any markdown formatting
-      //           let cleanedArgs = repairedArgs.trim();
-      //           if (cleanedArgs.startsWith('```json')) {
-      //             cleanedArgs = cleanedArgs.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      //           } else if (cleanedArgs.startsWith('```')) {
-      //             cleanedArgs = cleanedArgs.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      //           }
-
-      //           // Validate the repaired JSON
-      //           const parsedArgs = JSON.parse(cleanedArgs);
-
-      //           // Return the repaired tool call
-      //           return {
-      //             ...toolCall,
-      //             args: JSON.stringify(parsedArgs)
-      //           };
-      //         } catch (repairError) {
-      //           console.error(chalk.red(`Failed to repair tool call: ${repairError}`));
-      //           return null;
-      //         }
-      //       },
+      model: getAIModel(modelConfig),
       messages: [
-        ...conversationHistory.slice(0, -1).map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
+        // Few-shot examples
         {
-          role: "user",
+          role: "user" as const,
+          content: "turn on the kitchen lights",
+        },
+        {
+          role: "assistant" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "Turning on the kitchen lights.",
+            },
+            {
+              type: "tool-call" as const,
+              toolCallId: "example1",
+              toolName: "setLightStateByArea",
+              args: { area: "kitchen", state: "on" },
+            },
+          ],
+        },
+        {
+          role: "tool" as const,
+          content: [
+            {
+              type: "tool-result" as const,
+              toolCallId: "example1",
+              toolName: "setLightStateByArea",
+              result: { success: true },
+            },
+          ],
+        },
+        {
+          role: "user" as const,
+          content: "all lights off",
+        },
+        {
+          role: "assistant" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "Turning off all lights.",
+            },
+            {
+              type: "tool-call" as const,
+              toolCallId: "example2",
+              toolName: "setLightState",
+              args: {
+                lights: ["light.dimmable_light_4", "light.dimmable_light_5", "light.dimmable_light_6", "light.dimmable_light_7", "light.dimmable_light_8"],
+                state: "off",
+              },
+            },
+          ],
+        },
+        {
+          role: "tool" as const,
+          content: [
+            {
+              type: "tool-result" as const,
+              toolCallId: "example2",
+              toolName: "setLightState",
+              result: { success: true },
+            },
+          ],
+        },
+        {
+          role: "user" as const,
+          content: "dim the bedroom to 30%",
+        },
+        {
+          role: "assistant" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "Dimming bedroom lights to 30%.",
+            },
+            {
+              type: "tool-call" as const,
+              toolCallId: "example3",
+              toolName: "setLightStateByArea",
+              args: { area: "bedroom", brightness: 30 },
+            },
+          ],
+        },
+        {
+          role: "tool" as const,
+          content: [
+            {
+              type: "tool-result" as const,
+              toolCallId: "example3",
+              toolName: "setLightStateByArea",
+              result: { success: true },
+            },
+          ],
+        },
+        {
+          role: "user" as const,
+          content: "goodnight",
+        },
+        {
+          role: "assistant" as const,
+          content: [
+            {
+              type: "text" as const,
+              text: "Goodnight! Turning off all lights.",
+            },
+            {
+              type: "tool-call" as const,
+              toolCallId: "example4",
+              toolName: "setLightState",
+              args: {
+                lights: ["light.dimmable_light_4", "light.dimmable_light_5", "light.dimmable_light_6", "light.dimmable_light_7", "light.dimmable_light_8"],
+                state: "off",
+              },
+            },
+          ],
+        },
+        {
+          role: "tool" as const,
+          content: [
+            {
+              type: "tool-result" as const,
+              toolCallId: "example4",
+              toolName: "setLightState",
+              result: { success: true },
+            },
+          ],
+        },
+        // Actual conversation history
+        ...conversationHistory.slice(0, -1).map((msg) => {
+          // Handle tool messages with content arrays
+          if (msg.role === "tool" && Array.isArray(msg.content)) {
+            return {
+              role: "tool" as const,
+              content: msg.content,
+            };
+          }
+          // Handle assistant messages with tool calls
+          if (msg.role === "assistant" && Array.isArray(msg.content)) {
+            return {
+              role: "assistant" as const,
+              content: msg.content,
+            };
+          }
+          // Regular text messages
+          return {
+            role: msg.role as "user" | "assistant",
+            content: msg.content as string,
+          };
+        }),
+        {
+          role: "user" as const,
           content: text,
         },
       ],
       system:
-        `Home Assistant voice control. Use exact entity_ids from list, never friendly names.
+        `You are a Home Assistant voice control assistant. Respond naturally but concisely to commands. Use exact entity_ids from list, never friendly names.
 
 RULES:
 - Use entity_id (e.g. "light.dimmable_light_4") not friendly names ("Pendant 1")
@@ -128,25 +248,68 @@ RULES:
 - Light control: setLightState (individual/multiple) or setLightStateByArea (area-based)
 - Climate control: setTemperature (individual) or setAreaTemperature (area-based)
 - Light color temp: setLightTemperature or setAreaLightTemperature (warm/cool/daylight)
-- Don't think too hard about it - the requests are usually pretty simple so don't second guess yourself.
-- You should aim to respond as quickly as possible, and you can do this by saying as little as possible.
+- Respond conversationally but briefly (1-2 sentences max)
+- Confirm what you're doing in simple terms
+- You MUST call a tool if it is possible to do so.
 
 Available lights:
 ${lightsList || "(No lights detected)"}
 
 Common mappings:
-Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8
-
-Examples:
-"all pendant lights" → setLightState with ALL pendant entity_ids
-"lounge room lights off" → setLightStateByArea area="lounge", state="off"
-"floor lamp on" → setLightState lights="light.floor_lamp", state="on"
-"set lounge AC to 24" → setAreaTemperature area="lounge", temperature=24
-"warm white in bedroom" → setAreaLightTemperature area="bedroom", temperature="warm white"`,
+Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
       abortSignal: abortController.signal,
       tools,
-      maxSteps: 1,
-      temperature: 0.1
+      maxSteps: 5,
+      temperature: modelConfig.temperature || 0.1,
+      maxTokens: modelConfig.maxTokens,
+      onStepFinish: async (stepResult) => {
+        await logger.debug("AI", "Step finished", { 
+          toolCalls: stepResult.toolCalls?.length || 0,
+          toolResults: stepResult.toolResults?.length || 0,
+          text: stepResult.text?.slice(0, 100)
+        });
+        
+        // Store tool calls in conversation history
+        if (stepResult.toolCalls && stepResult.toolCalls.length > 0) {
+          const assistantContent: CoreAssistantMessage["content"] = [];
+          if (stepResult.text) {
+            assistantContent.push({ type: "text", text: stepResult.text });
+          }
+          stepResult.toolCalls.forEach((tc) => {
+            assistantContent.push({
+              type: "tool-call",
+              toolCallId: tc.toolCallId,
+              toolName: tc.toolName,
+              args: tc.args
+            });
+          });
+          
+          conversationHistory.push({
+            role: "assistant",
+            content: assistantContent,
+            timestamp: new Date(),
+            toolCalls: stepResult.toolCalls
+          });
+        }
+        
+        // Store tool results in conversation history  
+        if (stepResult.toolResults && stepResult.toolResults.length > 0) {
+          const toolContent: CoreToolMessage["content"] = stepResult.toolResults.map((tr) => ({
+            type: "tool-result" as const,
+            toolCallId: (tr as any).toolCallId,
+            toolName: (tr as any).toolName,
+            result: (tr as any).result,
+            isError: (tr as any).isError
+          }));
+          
+          conversationHistory.push({
+            role: "tool",
+            content: toolContent,
+            timestamp: new Date(),
+            toolResults: stepResult.toolResults
+          });
+        }
+      }
     });
 
     let result = "";
@@ -162,12 +325,15 @@ Examples:
       conversationLength: conversationHistory.length 
     });
 
-    // Add assistant response to history
-    conversationHistory.push({
-      role: "assistant",
-      content: result,
-      timestamp: new Date(),
-    });
+    // Add final assistant response if no tool calls were made
+    const lastMessage = conversationHistory[conversationHistory.length - 1];
+    if (!lastMessage || lastMessage.role !== "assistant" || !lastMessage.toolCalls) {
+      conversationHistory.push({
+        role: "assistant",
+        content: result,
+        timestamp: new Date(),
+      });
+    }
 
     return result;
   } catch (err) {
