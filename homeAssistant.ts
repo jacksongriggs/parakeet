@@ -1,6 +1,6 @@
 // Home Assistant integration functionality
 
-import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, CACHE_DURATION } from "./config.ts";
+import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, CACHE_DURATION_MS } from "./config.ts";
 import type { Light, ClimateEntity } from "./types.ts";
 import { logger } from "./logger.ts";
 
@@ -53,7 +53,7 @@ export async function getAvailableLights(): Promise<Light[]> {
   const now = Date.now();
 
   // Return cached entities if still fresh
-  if (lightsCache.length > 0 && now - lightsCacheTime < CACHE_DURATION) {
+  if (lightsCache.length > 0 && now - lightsCacheTime < CACHE_DURATION_MS) {
     await logger.debug("HA_CACHE", "Using cached lights data", { lightsCount: lightsCache.length });
     return lightsCache;
   }
@@ -138,7 +138,7 @@ export async function getAvailableClimateEntities(): Promise<ClimateEntity[]> {
   const now = Date.now();
 
   // Return cached entities if still fresh
-  if (climateCache.length > 0 && now - climateCacheTime < CACHE_DURATION) {
+  if (climateCache.length > 0 && now - climateCacheTime < CACHE_DURATION_MS) {
     await logger.debug("HA_CACHE", "Using cached climate data", { climateCount: climateCache.length });
     return climateCache;
   }

@@ -1,5 +1,5 @@
 import { ParrotStreamSDK } from "@parrot/sdk";
-import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT, USE_PARTIAL_RESULTS, PARTIAL_TIMEOUT } from "./config.ts";
+import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT_MS, USE_PARTIAL_RESULTS, PARTIAL_TIMEOUT } from "./config.ts";
 import { abort, analyse } from "./ai.ts";
 import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
@@ -69,7 +69,7 @@ async function parrot(): Promise<void> {
           isAwake = false;
           wakeTimeout = null;
           logger.info("WAKE", "Wake word timeout - going back to sleep");
-        }, WAKE_WORD_TIMEOUT);
+        }, WAKE_WORD_TIMEOUT_MS);
         
         await logger.info("WAKE", "Wake word detected! Listening for commands...", { wake_word: WAKE_WORD });
         await logger.info("WAKE_DISPLAY", `🦜 ${WAKE_WORD} detected! Listening...`);
