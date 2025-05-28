@@ -5,8 +5,12 @@ import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
 import { getActiveModelConfig, listAvailableModels } from "./modelConfig.ts";
 import { detectUtteranceContinuation, cancelAndRollback } from "./generationTracker.ts";
+import { initializeTTS, speak, stopSpeaking } from "./tts.ts";
 
 await logger.sessionStart();
+
+// Initialize TTS
+initializeTTS();
 
 // Show model configuration
 const modelConfig = getActiveModelConfig();
@@ -132,6 +136,7 @@ async function parrot(): Promise<void> {
         const commandText = stripWakeWord(text);
         if (commandText) {
           abort();
+          await stopSpeaking();
           
           await logger.info("VOICE", "Processing command after wake word", { text: commandText, channel });
           await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
@@ -140,6 +145,11 @@ async function parrot(): Promise<void> {
             const aiResult = await analyse(commandText, tools, id);
             await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
             await logger.info("AI_OUTPUT", aiResult);
+            
+            // Speak the AI response
+            if (aiResult && aiResult.trim()) {
+              await speak(aiResult);
+            }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             await logger.error("AI", "AI analysis failed", { input: commandText, error: errorMessage });
@@ -149,6 +159,7 @@ async function parrot(): Promise<void> {
       } else if (isAwake) {
         // We're awake and this is a command
         abort();
+        await stopSpeaking();
         
         const commandText = stripWakeWord(text);
         await logger.info("VOICE", "Voice command received", { text: commandText, channel });
@@ -158,6 +169,11 @@ async function parrot(): Promise<void> {
           const aiResult = await analyse(commandText, tools, id);
           await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
           await logger.info("AI_OUTPUT", aiResult);
+          
+          // Speak the AI response
+          if (aiResult && aiResult.trim()) {
+            await speak(aiResult);
+          }
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           await logger.error("AI", "AI analysis failed", { input: commandText, error: errorMessage });
@@ -266,12 +282,18 @@ async function parrot(): Promise<void> {
             
             // Process as a command
             abort();
+            await stopSpeaking();
             await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
             
             try {
               const aiResult = await analyse(commandText, tools, partialId);
               await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
               await logger.info("AI_OUTPUT", aiResult);
+              
+              // Speak the AI response
+              if (aiResult && aiResult.trim()) {
+                await speak(aiResult);
+              }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);
               await logger.error("AI", "AI analysis failed", { input: commandText, error: errorMessage });

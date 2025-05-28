@@ -44,6 +44,21 @@ export const PARTIAL_TIMEOUT = 1000;
 // Reduces API calls to Home Assistant
 export const CACHE_DURATION = 5;
 
+// ===== Text-to-Speech Configuration =====
+
+// Enable or disable TTS for AI responses
+export const TTS_ENABLED = Deno.env.get("TTS_ENABLED") !== "false"; // Default: true
+
+// TTS voice to use (options: coral, alloy, echo, fable, onyx, nova)
+export const TTS_VOICE = Deno.env.get("TTS_VOICE") || "coral";
+
+// TTS model to use
+export const TTS_MODEL = Deno.env.get("TTS_MODEL") || "gpt-4o-mini-tts";
+
+// Optional instructions for voice customization
+export const TTS_INSTRUCTIONS = Deno.env.get("TTS_INSTRUCTIONS") || 
+  "Speak as a helpful and friendly smart home assistant.";
+
 // ===== Advanced Configuration =====
 
 // Convert timeout values to milliseconds (don't modify unless you know what you're doing)
