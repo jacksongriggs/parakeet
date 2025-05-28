@@ -10,6 +10,29 @@ let climateCache: ClimateEntity[] = [];
 let lightsCacheTime = 0;
 let climateCacheTime = 0;
 
+// Helper function to fetch area for an entity
+async function getEntityArea(entityId: string): Promise<string | undefined> {
+  try {
+    const areaResponse = await fetch(
+      `${HOME_ASSISTANT_URL}/api/template`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          template: `{{ area_name("${entityId}") }}`,
+        }),
+      },
+    );
+    const area = await areaResponse.text();
+    return area.trim() || undefined;
+  } catch (_error) {
+    return undefined;
+  }
+}
+
 export async function callHomeAssistantService(
   domain: string,
   service: string,
@@ -74,7 +97,11 @@ export async function getAvailableLights(): Promise<Light[]> {
 
     const states = await response.json() as Array<{
       entity_id: string;
-      attributes?: { friendly_name?: string };
+      attributes?: { 
+        friendly_name?: string;
+        supported_color_modes?: string[];
+        color_mode?: string;
+      };
     }>;
     const lightStates = states.filter((state) =>
       state.entity_id.startsWith("light.")
@@ -84,35 +111,14 @@ export async function getAvailableLights(): Promise<Light[]> {
     // Note: We keep Promise.all here as it already executes in parallel
     lightsCache = await Promise.all(
       lightStates.map(async (state) => {
-        try {
-          const areaResponse = await fetch(
-            `${HOME_ASSISTANT_URL}/api/template`,
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                template: `{{ area_name("${state.entity_id}") }}`,
-              }),
-            },
-          );
-
-          const area = await areaResponse.text();
-
-          return {
-            entity_id: state.entity_id,
-            friendly_name: state.attributes?.friendly_name || state.entity_id,
-            area: area.trim() || undefined,
-          };
-        } catch (_error) {
-          // If area lookup fails, return without area
-          return {
-            entity_id: state.entity_id,
-            friendly_name: state.attributes?.friendly_name || state.entity_id,
-          };
-        }
+        const area = await getEntityArea(state.entity_id);
+        return {
+          entity_id: state.entity_id,
+          friendly_name: state.attributes?.friendly_name || state.entity_id,
+          area,
+          supported_color_modes: state.attributes?.supported_color_modes,
+          color_mode: state.attributes?.color_mode,
+        };
       }),
     );
     lightsCacheTime = now;
@@ -168,35 +174,12 @@ export async function getAvailableClimateEntities(): Promise<ClimateEntity[]> {
     // Get area information for each climate entity
     climateCache = await Promise.all(
       climateStates.map(async (state) => {
-        try {
-          const areaResponse = await fetch(
-            `${HOME_ASSISTANT_URL}/api/template`,
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${HOME_ASSISTANT_TOKEN}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                template: `{{ area_name("${state.entity_id}") }}`,
-              }),
-            },
-          );
-
-          const area = await areaResponse.text();
-
-          return {
-            entity_id: state.entity_id,
-            friendly_name: state.attributes?.friendly_name || state.entity_id,
-            area: area.trim() || undefined,
-          };
-        } catch (_error) {
-          // If area lookup fails, return without area
-          return {
-            entity_id: state.entity_id,
-            friendly_name: state.attributes?.friendly_name || state.entity_id,
-          };
-        }
+        const area = await getEntityArea(state.entity_id);
+        return {
+          entity_id: state.entity_id,
+          friendly_name: state.attributes?.friendly_name || state.entity_id,
+          area,
+        };
       }),
     );
     climateCacheTime = now;
@@ -210,6 +193,27 @@ export async function getAvailableClimateEntities(): Promise<ClimateEntity[]> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     await logger.error("HA_API", "Failed to fetch climate entities", { error: errorMessage });
     return climateCache; // Return cached data if fetch fails
+  }
+}
+
+// Utility functions to check light capabilities
+export function supportsColorControl(light: Light): boolean {
+  const colorModes = light.supported_color_modes || [];
+  return colorModes.some(mode => ['rgb', 'rgbw', 'rgbww', 'hs', 'xy'].includes(mode));
+}
+
+export function supportsTemperatureControl(light: Light): boolean {
+  const colorModes = light.supported_color_modes || [];
+  return colorModes.some(mode => ['color_temp', 'rgbww'].includes(mode));
+}
+
+export function getBestLightControlMode(light: Light): 'color' | 'temperature' | 'brightness_only' {
+  if (supportsColorControl(light)) {
+    return 'color';
+  } else if (supportsTemperatureControl(light)) {
+    return 'temperature';
+  } else {
+    return 'brightness_only';
   }
 }
 

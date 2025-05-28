@@ -2,7 +2,7 @@
 
 import { Tool } from "ai";
 import { z } from "zod";
-import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities } from "./homeAssistant.ts";
+import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, supportsColorControl, supportsTemperatureControl } from "./homeAssistant.ts";
 import type { ClimateEntity } from "./types.ts";
 import { logger } from "./logger.ts";
 
@@ -45,6 +45,142 @@ function getRandomColor(): { r: number; g: number; b: number } {
     g: Math.floor(Math.random() * 256),
     b: Math.floor(Math.random() * 256),
   };
+}
+
+// Shared light control function that handles capability checking
+async function controlLights(
+  lightInputs: string | string[],
+  params: {
+    state?: "on" | "off";
+    brightness?: number;
+    color?: { r: number; g: number; b: number };
+    temperature?: number;
+  }
+): Promise<string> {
+  const { state, brightness, color, temperature } = params;
+  
+  // Normalize to array
+  const lightArray = Array.isArray(lightInputs) ? lightInputs : [lightInputs];
+
+  // Get available lights and validate entities exist
+  const availableLights = await getAvailableLights();
+  const lightEntitiesMap = new Map(availableLights.map(l => [l.entity_id, l]));
+  
+  // Filter out non-existent entities and get light objects
+  const validLightEntities = lightArray.map(light => {
+    const entity_id = light.includes(".") ? light : `light.${light}`;
+    const lightEntity = lightEntitiesMap.get(entity_id);
+    if (!lightEntity) {
+      logger.warn("TOOL", "Skipping non-existent light entity", { entity_id });
+    }
+    return lightEntity;
+  }).filter(Boolean) as typeof availableLights;
+
+  if (validLightEntities.length === 0) {
+    await logger.warn("TOOL", "No valid lights found", { requested: lightArray });
+    return "No valid lights found to control.";
+  }
+
+  // Check capabilities and warn about unsupported features
+  if (color) {
+    const unsupportedColorLights = validLightEntities.filter(light => !supportsColorControl(light));
+    if (unsupportedColorLights.length > 0) {
+      await logger.warn("TOOL", "Some lights don't support color control", { 
+        unsupportedLights: unsupportedColorLights.map(l => l.entity_id),
+        willFallbackToTemperature: unsupportedColorLights.some(l => supportsTemperatureControl(l))
+      });
+    }
+  }
+
+  if (temperature) {
+    const unsupportedTempLights = validLightEntities.filter(light => !supportsTemperatureControl(light));
+    if (unsupportedTempLights.length > 0) {
+      await logger.warn("TOOL", "Some lights don't support temperature control", { 
+        unsupportedLights: unsupportedTempLights.map(l => l.entity_id),
+        supportedColorModes: unsupportedTempLights.map(l => l.supported_color_modes)
+      });
+    }
+  }
+
+  // Create promises for all light operations
+  const promises = validLightEntities.map(async (lightEntity) => {
+    try {
+      const entity_id = lightEntity.entity_id;
+
+      const serviceData: Record<string, string | number | number[]> = {
+        entity_id: entity_id,
+      };
+
+      if (state === "on") {
+        if (brightness !== undefined) {
+          serviceData.brightness = brightness;
+        }
+        
+        // Handle color with capability checking
+        if (color) {
+          if (supportsColorControl(lightEntity)) {
+            serviceData.rgb_color = [color.r, color.g, color.b];
+          } else if (supportsTemperatureControl(lightEntity)) {
+            // Fallback to warm white temperature for color requests on temp-only lights
+            serviceData.color_temp_kelvin = 3000;
+            await logger.info("TOOL", "Falling back to warm temperature for color request", { entity_id });
+          } else {
+            await logger.warn("TOOL", "Light supports neither color nor temperature", { entity_id });
+          }
+        }
+        
+        // Handle temperature with capability checking
+        if (temperature) {
+          if (supportsTemperatureControl(lightEntity)) {
+            serviceData.color_temp_kelvin = temperature;
+          } else {
+            await logger.warn("TOOL", "Light doesn't support temperature control", { entity_id });
+          }
+        }
+      }
+
+      await callHomeAssistantService(
+        "light",
+        state === "on" ? "turn_on" : "turn_off",
+        serviceData,
+      );
+      await logger.debug("TOOL", "Light control successful", { entity_id });
+      return { success: true, entity_id };
+    } catch (error) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : String(error);
+      await logger.error("TOOL", "Light control failed", { entity_id: lightEntity.entity_id, error: errorMessage });
+      return { success: false, entity_id: lightEntity.entity_id, error: errorMessage };
+    }
+  });
+
+  // Execute all promises in parallel
+  const results = await Promise.all(promises);
+
+  // Separate successes and failures
+  const successes = results.filter((r) => r.success).map((r) => r.entity_id);
+  const failures = results.filter((r) => !r.success).map((r) => `${r.entity_id}: ${r.error}`);
+
+  // Build response message
+  let response;
+  const stateDesc = state === "on" ? "on" : "off";
+  const brightnessDesc = brightness ? ` with brightness ${brightness}` : "";
+  const colorDesc = color ? ` with color` : "";
+  const tempDesc = temperature ? ` at ${temperature}K` : "";
+  
+  if (successes.length > 0 && failures.length === 0) {
+    response = `Successfully turned ${successes.join(", ")} ${stateDesc}${brightnessDesc}${colorDesc}${tempDesc}.`;
+    await logger.info("TOOL", "All lights controlled successfully", { successes, state });
+  } else if (successes.length > 0 && failures.length > 0) {
+    response = `Turned ${successes.join(", ")} ${stateDesc}. Failed to control: ${failures.join("; ")}`;
+    await logger.warn("TOOL", "Partial light control success", { successes, failures });
+  } else {
+    response = `Failed to control lights: ${failures.join("; ")}`;
+    await logger.error("TOOL", "All light controls failed", { failures });
+  }
+  
+  return response;
 }
 
 const z_setLightState = z.object({
@@ -150,110 +286,9 @@ export const tools: Record<string, Tool> = {
   setLightState: {
     description: "Set a light's state in Home Assistant",
     parameters: z_setLightState,
-    execute: async function setLightState(
-      { lights, state, brightness, color },
-    ) {
-      // Normalize to array
-      const lightArray = Array.isArray(lights) ? lights : [lights];
-
-      // Get available lights and validate entities exist
-      const availableLights = await getAvailableLights();
-      const availableEntityIds = new Set(availableLights.map(l => l.entity_id));
-      
-      // Filter out non-existent entities
-      const validLights = lightArray.filter(light => {
-        const entity_id = light.includes(".") ? light : `light.${light}`;
-        const exists = availableEntityIds.has(entity_id);
-        if (!exists) {
-          logger.warn("TOOL", "Skipping non-existent light entity", { entity_id });
-        }
-        return exists;
-      });
-
-      if (validLights.length === 0) {
-        await logger.warn("TOOL", "No valid lights found", { requested: lightArray });
-        return "No valid lights found to control.";
-      }
-
-      await logger.info("TOOL", "Setting light state", { 
-        lights: validLights, 
-        state, 
-        brightness, 
-        color 
-      });
-
-      await logger.info("TOOL", "Setting light state", {
-        lights: validLights,
-        state,
-        brightness,
-        color,
-        status: "starting"
-      });
-
-      // Create promises for all light operations
-      const promises = validLights.map(async (light) => {
-        try {
-          // Ensure entity_id has proper format
-          const entity_id = light.includes(".") ? light : `light.${light}`;
-
-          const serviceData: Record<string, string | number | number[]> = {
-            entity_id: entity_id,
-          };
-
-          if (state === "on") {
-            if (brightness !== undefined) {
-              serviceData.brightness = brightness;
-            }
-            if (color) {
-              serviceData.rgb_color = [color.r, color.g, color.b];
-            }
-          }
-
-          await callHomeAssistantService(
-            "light",
-            state === "on" ? "turn_on" : "turn_off",
-            serviceData,
-          );
-          await logger.debug("TOOL", "Light control successful", { entity_id });
-          return { success: true, entity_id };
-        } catch (error) {
-          const errorMessage = error instanceof Error
-            ? error.message
-            : String(error);
-          await logger.error("TOOL", "Light control failed", { entity_id: light, error: errorMessage });
-          return { success: false, entity_id: light, error: errorMessage };
-        }
-      });
-
-      // Execute all promises in parallel
-      const results = await Promise.all(promises);
-
-      // Separate successes and failures
-      const successes = results.filter((r) => r.success).map((r) =>
-        r.entity_id
-      );
-      const failures = results.filter((r) => !r.success).map((r) =>
-        `${r.entity_id}: ${r.error}`
-      );
-
-      // Build response message
-      let response;
-      if (successes.length > 0 && failures.length === 0) {
-        response = `Successfully turned ${successes.join(", ")} ${state}${
-          brightness ? ` with brightness ${brightness}` : ""
-        }${color ? ` with color` : ""}.`;
-        await logger.info("TOOL", "All lights controlled successfully", { successes, state });
-      } else if (successes.length > 0 && failures.length > 0) {
-        response = `Turned ${successes.join(", ")} ${state}. Failed to control: ${
-          failures.join("; ")
-        }`;
-        await logger.warn("TOOL", "Partial light control success", { successes, failures });
-      } else {
-        response = `Failed to control lights: ${failures.join("; ")}`;
-        await logger.error("TOOL", "All light controls failed", { failures });
-      }
-      
-      return response;
+    execute: async function setLightState({ lights, state, brightness, color }) {
+      await logger.info("TOOL", "Setting light state", { lights, state, brightness, color });
+      return await controlLights(lights, { state, brightness, color });
     },
   },
   turnOffAllLights: {
@@ -327,20 +362,7 @@ export const tools: Record<string, Tool> = {
         rgbColor = color;
       }
       
-      // Use the existing setLightState function
-      const setLightState = tools.setLightState.execute as (params: {
-        lights: string | string[];
-        state: "on" | "off";
-        brightness?: number;
-        color?: { r: number; g: number; b: number };
-      }) => Promise<string>;
-      
-      return await setLightState({
-        lights,
-        state: "on",
-        brightness,
-        color: rgbColor,
-      });
+      return await controlLights(lights, { state: "on", brightness, color: rgbColor });
     },
   },
   setAreaColor: {
@@ -478,63 +500,7 @@ export const tools: Record<string, Tool> = {
         kelvinTemp = temperature;
       }
       
-      // Normalize to array
-      const lightArray = Array.isArray(lights) ? lights : [lights];
-      
-      // Get available lights and validate entities exist
-      const availableLights = await getAvailableLights();
-      const availableEntityIds = new Set(availableLights.map(l => l.entity_id));
-      
-      // Filter out non-existent entities
-      const validLights = lightArray.filter(light => {
-        const entity_id = light.includes(".") ? light : `light.${light}`;
-        const exists = availableEntityIds.has(entity_id);
-        if (!exists) {
-          logger.warn("TOOL", "Skipping non-existent light entity", { entity_id });
-        }
-        return exists;
-      });
-
-      if (validLights.length === 0) {
-        await logger.warn("TOOL", "No valid lights found", { requested: lightArray });
-        return "No valid lights found to control.";
-      }
-      
-      // Create promises for all light operations
-      const promises = validLights.map(async (light) => {
-        try {
-          const entity_id = light.includes(".") ? light : `light.${light}`;
-          
-          const serviceData: Record<string, string | number> = {
-            entity_id: entity_id,
-            color_temp_kelvin: kelvinTemp,
-          };
-          
-          if (brightness !== undefined) {
-            serviceData.brightness = brightness;
-          }
-          
-          await callHomeAssistantService("light", "turn_on", serviceData);
-          await logger.debug("TOOL", "Light temperature control successful", { entity_id, kelvinTemp });
-          return { success: true, entity_id };
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          await logger.error("TOOL", "Light temperature control failed", { entity_id: light, error: errorMessage });
-          return { success: false, entity_id: light, error: errorMessage };
-        }
-      });
-      
-      const results = await Promise.all(promises);
-      const successes = results.filter((r) => r.success).map((r) => r.entity_id);
-      const failures = results.filter((r) => !r.success).map((r) => `${r.entity_id}: ${r.error}`);
-      
-      if (successes.length > 0 && failures.length === 0) {
-        return `Successfully set ${successes.join(", ")} to ${kelvinTemp}K${brightness ? ` with brightness ${brightness}` : ""}.`;
-      } else if (successes.length > 0 && failures.length > 0) {
-        return `Set ${successes.join(", ")} to ${kelvinTemp}K. Failed to control: ${failures.join("; ")}`;
-      } else {
-        return `Failed to control lights: ${failures.join("; ")}`;
-      }
+      return await controlLights(lights, { state: "on", brightness, temperature: kelvinTemp });
     },
   },
   setAreaLightTemperature: {

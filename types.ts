@@ -11,6 +11,8 @@ export interface Light {
   entity_id: string;
   friendly_name: string;
   area?: string;
+  supported_color_modes?: string[];
+  color_mode?: string;
 }
 
 export interface ClimateEntity {
