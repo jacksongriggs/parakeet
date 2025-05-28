@@ -77,5 +77,25 @@ export function calculateCost(modelName: string, usage: UsageData): {
 export function formatUsageWithCost(modelName: string, usage: UsageData): string {
   const cost = calculateCost(modelName, usage);
   
-  return `Tokens: ${usage.promptTokens} in, ${usage.completionTokens} out (${usage.totalTokens} total) | Cost: ${cost.formattedCost}`;
+  if (cost.totalCost === 0) {
+    return `Tokens: ${usage.promptTokens} in, ${usage.completionTokens} out (${usage.totalTokens} total) | Cost: ${cost.formattedCost}`;
+  }
+  
+  // Format individual costs
+  let inputCostStr: string;
+  let outputCostStr: string;
+  
+  if (cost.inputCost < 0.01) {
+    inputCostStr = `$${(cost.inputCost * 100).toFixed(3)}¢`;
+  } else {
+    inputCostStr = `$${cost.inputCost.toFixed(4)}`;
+  }
+  
+  if (cost.outputCost < 0.01) {
+    outputCostStr = `$${(cost.outputCost * 100).toFixed(3)}¢`;
+  } else {
+    outputCostStr = `$${cost.outputCost.toFixed(4)}`;
+  }
+  
+  return `Tokens: ${usage.promptTokens} in (${inputCostStr}), ${usage.completionTokens} out (${outputCostStr}) | Total: ${usage.totalTokens} tokens, ${cost.formattedCost}`;
 }

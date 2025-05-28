@@ -1,6 +1,7 @@
 // Model and Provider Configuration
 import { z } from "zod";
 import { MODEL_COSTS } from "./costCalculator.ts";
+import { logger } from "./logger.ts";
 
 // Define provider types
 export type Provider = "openai" | "google" | "anthropic" | "local";
@@ -225,7 +226,8 @@ export function getActiveModelConfig(): ModelConfig {
   // Handle special "cheapest" value
   if (modelId === "cheapest") {
     modelId = getCheapestModel();
-    console.log(`🤑 Selected cheapest model: ${modelId}`);
+    // Log asynchronously without blocking
+    logger.info("MODEL", `Selected cheapest model: ${modelId}`).catch(() => {});
   }
   
   if (modelId in MODELS) {
