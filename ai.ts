@@ -6,8 +6,8 @@ import { getAvailableLights } from "./homeAssistant.ts";
 import type { Message } from "./types.ts";
 import { logger } from "./logger.ts";
 import { getActiveModelConfig, type ModelConfig } from "./modelConfig.ts";
+import { formatUsageWithCost } from "./costCalculator.ts";
 
-export const encoder = new TextEncoder();
 export let abortController = new AbortController();
 
 // Get the AI model instance based on configuration
@@ -17,6 +17,7 @@ function getAIModel(config: ModelConfig): LanguageModel {
       const openai = createOpenAI({ 
         apiKey: config.apiKey,
         baseURL: config.baseURL, // Only used for custom endpoints
+        compatibility: "strict", // Enable token usage tracking
       });
       return openai(config.model);
     }
@@ -29,6 +30,7 @@ function getAIModel(config: ModelConfig): LanguageModel {
       const localAI = createOpenAI({ 
         apiKey: config.apiKey || "",
         baseURL: config.baseURL!,
+        // Don't use strict mode for local models as they may not support it
       });
       return localAI(config.model);
     }
@@ -262,6 +264,17 @@ Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
       maxSteps: 5,
       temperature: modelConfig.temperature || 0.1,
       maxTokens: modelConfig.maxTokens,
+      onFinish: async ({ usage: finalUsage }) => {
+        // Log usage and cost if available
+        if (finalUsage && finalUsage.promptTokens && finalUsage.completionTokens) {
+          const usageStr = formatUsageWithCost(modelConfig.model, {
+            promptTokens: finalUsage.promptTokens,
+            completionTokens: finalUsage.completionTokens,
+            totalTokens: finalUsage.totalTokens
+          });
+          await logger.info("AI", `💰 ${usageStr}`);
+        }
+      },
       onStepFinish: async (stepResult) => {
         await logger.debug("AI", "Step finished", { 
           toolCalls: stepResult.toolCalls?.length || 0,
@@ -345,11 +358,5 @@ Pendant 1-5 → light.dimmable_light_4 through light.dimmable_light_8`,
       await logger.error("AI", "AI analysis error", { error: error.message, input: text });
       throw err;
     }
-  }
-}
-
-export async function write(...text: string[]) {
-  for (const part of text) {
-    await Deno.stdout.write(encoder.encode(part));
   }
 }
