@@ -221,7 +221,6 @@ export const tools: Record<string, Tool> = {
             ? error.message
             : String(error);
           await logger.error("TOOL", "Light control failed", { entity_id: light, error: errorMessage });
-          await logger.error("TOOL", "Light control failed", { entity_id: light, error: errorMessage });
           return { success: false, entity_id: light, error: errorMessage };
         }
       });

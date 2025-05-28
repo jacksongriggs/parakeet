@@ -190,12 +190,24 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
         
         // Store tool results in conversation history  
         if (stepResult.toolResults && stepResult.toolResults.length > 0) {
-          const toolContent: CoreToolMessage["content"] = stepResult.toolResults.map((tr) => ({
-            type: "tool-result" as const,
-            toolCallId: (tr as {toolCallId: string}).toolCallId,
-            toolName: (tr as {toolName: string}).toolName,
-            result: (tr as {result: unknown}).result
-          }));
+          interface ToolResult {
+            toolCallId: string;
+            toolName: string;
+            result: unknown;
+          }
+          const toolContent: CoreToolMessage["content"] = stepResult.toolResults.map((tr: ToolResult) => {
+            // Type guard for tool result structure
+            if (tr satisfies Partial<ToolResult> && 
+              tr.toolCallId && tr.toolName && 'result' in tr) {
+              return {
+                type: "tool-result" as const,
+                toolCallId: tr.toolCallId as string,
+                toolName: tr.toolName as string,
+                result: tr.result
+              };
+            }
+            throw new Error('Invalid tool result structure');
+          });
           
           conversationHistory.push({
             role: "tool",

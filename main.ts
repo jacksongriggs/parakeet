@@ -135,10 +135,11 @@ async function parrot(): Promise<void> {
           wakeTimeout = null;
         }
         
-        // Clean up old utterance IDs periodically (keep last 100)
+        // Clean up old utterance IDs periodically (keep last 50)
         if (processedUtteranceIds.size > 100) {
-          const idsArray = Array.from(processedUtteranceIds);
-          processedUtteranceIds = new Set(idsArray.slice(-50));
+          const keepIds = Array.from(processedUtteranceIds).slice(-50);
+          processedUtteranceIds.clear();
+          keepIds.forEach(id => processedUtteranceIds.add(id));
         }
       } else {
         // Not awake, waiting for wake word
