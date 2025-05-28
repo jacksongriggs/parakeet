@@ -36,7 +36,7 @@ export const USE_PARTIAL_RESULTS = true;
 // How long to wait (in milliseconds) before treating a partial result as final
 // Lower = faster response, but might cut off mid-sentence
 // Higher = more accurate, but slower response
-export const PARTIAL_TIMEOUT = 500;
+export const PARTIAL_TIMEOUT = 1000;
 
 // ===== Performance Configuration =====
 

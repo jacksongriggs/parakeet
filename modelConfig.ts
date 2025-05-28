@@ -141,7 +141,7 @@ export const MODELS: Record<string, ModelConfig> = {
   // Google models
   "google/gemini-2.5-flash": {
     provider: "google",
-    model: "gemini-2.5-flash-preview-04-17",
+    model: "gemini-2.5-flash-preview-05-20",
     apiKey: Deno.env.get("GOOGLE_API_KEY"),
     description: "Google's best price-to-performance model with thinking capabilities",
     temperature: 0.1,

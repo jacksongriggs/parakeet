@@ -37,7 +37,7 @@ export interface SessionCosts {
 
 export const FREE_TIER_LIMITS: Record<string, FreeTierLimits> = {
   // Google Gemini free tier limits
-  "gemini-2.5-flash-preview-04-17": { requestsPerMinute: 15, requestsPerDay: 1500 },
+  "gemini-2.5-flash-preview-05-20": { requestsPerMinute: 15, requestsPerDay: 1500 },
   "gemini-2.0-flash": { requestsPerMinute: 15, requestsPerDay: 1500 },
   "gemini-1.5-flash-8b": { requestsPerMinute: 15, requestsPerDay: 1500 },
   "gemini-1.5-flash": { requestsPerMinute: 15, requestsPerDay: 1500 },
@@ -53,7 +53,7 @@ export const MODEL_COSTS: Record<string, ModelCost> = {
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
   
   // Google Gemini models (2025 pricing)
-  "gemini-2.5-flash-preview-04-17": { input: 0.10, output: 0.40 }, // Gemini 2.5 Flash pricing
+  "gemini-2.5-flash-preview-05-20": { input: 0.10, output: 0.40 }, // Gemini 2.5 Flash pricing
   "gemini-2.0-flash": { input: 0.10, output: 0.40 },
   "gemini-1.5-flash-8b": { input: 0.0375, output: 0.15 },
   "gemini-1.5-flash": { input: 0.075, output: 0.30 }, // $0.075/1M input, $0.30/1M output
