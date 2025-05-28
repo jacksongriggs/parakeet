@@ -31,7 +31,7 @@ async function parrot(): Promise<void> {
   let lastPartialTime: number | null = null;
   let partialTimeout: number | null = null;
   let lastPartialText: string | null = null;
-  let processedUtteranceIds = new Set<string>();
+  const processedUtteranceIds = new Set<string>();
   
   const parrot = new ParrotStreamSDK({
     channels: [1],
