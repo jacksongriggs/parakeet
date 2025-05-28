@@ -5,6 +5,7 @@ import { z } from "zod";
 import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl, getAvailableMediaPlayers } from "./homeAssistant.ts";
 import type { ClimateEntity, MediaPlayer } from "./types.ts";
 import { logger } from "./logger.ts";
+import { captureEntityState, recordToolExecution } from "./generationTracker.ts";
 
 // Color temperature mappings (in Kelvin)
 const colorTemperatureMap: Record<string, number> = {
@@ -101,6 +102,9 @@ async function controlLights(
       });
     }
   }
+
+  // Capture entity states before making changes
+  await Promise.all(validLightEntities.map(entity => captureEntityState(entity.entity_id)));
 
   // Create promises for all light operations
   const promises = validLightEntities.map(async (lightEntity) => {
@@ -345,6 +349,7 @@ export const tools: Record<string, Tool> = {
     }),
     execute: async ({ area, state, brightness, color }) => {
       await logger.info("TOOL", "Setting lights by area", { area, state, brightness, color });
+      recordToolExecution("setLightStateByArea");
       
       const lights = await getAvailableLights();
       const areaLights = lights.filter((l) =>
@@ -381,6 +386,7 @@ export const tools: Record<string, Tool> = {
     parameters: z_setLightState,
     execute: async function setLightState({ lights, state, brightness, color }) {
       await logger.info("TOOL", "Setting light state", { lights, state, brightness, color });
+      recordToolExecution("setLightState");
       return await controlLights(lights, { state, brightness, color });
     },
   },
@@ -643,9 +649,13 @@ export const tools: Record<string, Tool> = {
     }),
     execute: async ({ entity, state }) => {
       await logger.info("TOOL", "Setting climate state", { entity, state });
+      recordToolExecution("setClimateState");
       
       try {
         const entity_id = entity.includes(".") ? entity : `climate.${entity}`;
+        
+        // Capture current state before changing
+        await captureEntityState(entity_id);
         
         let service: string;
         const serviceData: Record<string, string | number> = { entity_id };
@@ -678,9 +688,13 @@ export const tools: Record<string, Tool> = {
     }),
     execute: async ({ entity, temperature }) => {
       await logger.info("TOOL", "Setting temperature", { entity, temperature });
+      recordToolExecution("setTemperature");
       
       try {
         const entity_id = entity.includes(".") ? entity : `climate.${entity}`;
+        
+        // Capture current state before changing
+        await captureEntityState(entity_id);
         
         await callHomeAssistantService("climate", "set_temperature", {
           entity_id: entity_id,
@@ -904,9 +918,13 @@ export const tools: Record<string, Tool> = {
     }),
     execute: async ({ entity, action, volume }) => {
       await logger.info("TOOL", "Setting media player state", { entity, action, volume });
+      recordToolExecution("setMediaPlayerState");
       
       try {
         const entity_id = entity.includes(".") ? entity : `media_player.${entity}`;
+        
+        // Capture current state before changing
+        await captureEntityState(entity_id);
         
         let service: string;
         const serviceData: Record<string, string | number> = { entity_id };
