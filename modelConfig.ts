@@ -1,5 +1,6 @@
 // Model and Provider Configuration
 import { z } from "zod";
+import { MODEL_COSTS } from "./costCalculator.ts";
 
 // Define provider types
 export type Provider = "openai" | "google" | "anthropic" | "local";
@@ -187,10 +188,45 @@ export const MODELS: Record<string, ModelConfig> = {
   },
 };
 
+// Get the cheapest non-local model
+export function getCheapestModel(): string {
+  let cheapestModelId = "";
+  let lowestCost = Infinity;
+  
+  for (const [modelId, config] of Object.entries(MODELS)) {
+    // Skip local models
+    if (config.provider === "local") continue;
+    
+    // Get the cost for this model
+    const cost = MODEL_COSTS[config.model];
+    if (!cost) continue;
+    
+    // Calculate average cost per token (average of input and output)
+    const avgCost = (cost.input + cost.output) / 2;
+    
+    if (avgCost < lowestCost && avgCost > 0) {
+      lowestCost = avgCost;
+      cheapestModelId = modelId;
+    }
+  }
+  
+  if (!cheapestModelId) {
+    throw new Error("No non-local models with cost information found");
+  }
+  
+  return cheapestModelId;
+}
+
 // Get the active model configuration
 export function getActiveModelConfig(): ModelConfig {
   // First check for MODEL_ID env var
-  const modelId = Deno.env.get("MODEL_ID") || Deno.env.get("ACTIVE_MODEL") || "local/qwen3-1.7b";
+  let modelId = Deno.env.get("MODEL_ID") || Deno.env.get("ACTIVE_MODEL") || "local/qwen3-1.7b";
+  
+  // Handle special "cheapest" value
+  if (modelId === "cheapest") {
+    modelId = getCheapestModel();
+    console.log(`🤑 Selected cheapest model: ${modelId}`);
+  }
   
   if (modelId in MODELS) {
     const config = MODELS[modelId];
@@ -245,6 +281,15 @@ export function listAvailableModels(): void {
                        (config.provider === "google" && !config.apiKey) 
                        ? " (⚠️  API key required)" : "";
         console.log(`  - ${id}: ${config.model}${status}`);
+        
+        // Show cost information if available
+        const cost = MODEL_COSTS[config.model];
+        if (cost && (cost.input > 0 || cost.output > 0)) {
+          console.log(`    💰 Cost: $${cost.input}/M input, $${cost.output}/M output`);
+        } else if (config.provider === "local") {
+          console.log(`    💰 Cost: Free (local model)`);
+        }
+        
         if (config.description) {
           console.log(`    ${config.description}`);
         }
@@ -253,8 +298,20 @@ export function listAvailableModels(): void {
     }
   }
   
+  // Show cheapest model
+  try {
+    const cheapestId = getCheapestModel();
+    const cheapestConfig = MODELS[cheapestId];
+    const cheapestCost = MODEL_COSTS[cheapestConfig.model];
+    console.log(`🤑 Cheapest non-local model: ${cheapestId}`);
+    console.log(`   Cost: $${cheapestCost.input}/M input, $${cheapestCost.output}/M output\n`);
+  } catch (_e) {
+    // Ignore if no cheapest model found
+  }
+  
   console.log("To use a model, set MODEL_ID environment variable:");
-  console.log("Example: MODEL_ID=openai/gpt-4.1-nano deno task dev\n");
+  console.log("Example: MODEL_ID=openai/gpt-4.1-nano deno task dev");
+  console.log("Example: MODEL_ID=cheapest deno task dev (selects cheapest non-local model)\n");
 }
 
 // Helper to get server-specific models (for different local AI servers)
