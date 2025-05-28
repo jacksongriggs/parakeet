@@ -18,6 +18,7 @@ The application consists of:
 - **tools.ts**: Tool definitions for Home Assistant device control
 - **homeAssistant.ts**: Home Assistant API integration and entity management
 - **config.ts**: Environment configuration and constants
+- **modelConfig.ts**: AI model and provider configuration system
 - **types.ts**: TypeScript type definitions
 - **logger.ts**: Session-based logging system
 
@@ -32,7 +33,8 @@ Key functionality:
 Key dependencies:
 
 - `@parrot/sdk`: Local SDK for audio streaming and transcription (relative import)
-- `@ai-sdk/openai`: OpenAI SDK configured for local endpoint
+- `@ai-sdk/openai`: OpenAI SDK for OpenAI and local models
+- `@ai-sdk/google`: Google Generative AI SDK for Gemini models
 - `ai`: Vercel AI SDK for streaming text generation with tool calling
 - `chalk`: Terminal text styling
 - `zod`: Schema validation for tool parameters
@@ -46,6 +48,9 @@ deno task dev
 # Run the application directly
 deno run --allow-all --env-file=.env main.ts
 
+# List available AI models
+deno run --allow-all --env-file=.env main.ts --list-models
+
 # Run tests
 deno test
 ```
@@ -55,14 +60,19 @@ deno test
 Environment variables (set in `.env` file):
 - `HOME_ASSISTANT_URL`: Home Assistant instance URL (default: http://homeassistant.local:8123)
 - `HOME_ASSISTANT_TOKEN`: Long-lived access token for Home Assistant API
-- `OPENAI_API_KEY`: Optional, defaults to empty string for local models
-
-The AI model configuration is in `config.ts` (currently `qwen3-1.7b`).
+- `MODEL_ID`: AI model to use (default: `local/qwen3-1.7b`). Available models:
+  - Local: `local/qwen3-1.7b`, `local/deepseek-r1-distill-qwen-7b`, `local/gemma-2-9b`, `local/mistral-nemo`
+  - OpenAI: `openai/gpt-4.1-nano`, `openai/gpt-4.1-mini`, `openai/gpt-4.1`, `openai/gpt-4o`, `openai/gpt-4o-mini` (requires `OPENAI_API_KEY`)
+  - Google: `google/gemini-2.5-flash`, `google/gemini-2.0-flash`, `google/gemini-1.5-flash`, `google/gemini-1.5-pro` (requires `GOOGLE_API_KEY`)
+- `LOCAL_AI_URL`: Override default local AI server URL (optional)
+- `OPENAI_API_KEY`: Required for OpenAI models
+- `GOOGLE_API_KEY`: Required for Google Gemini models
 
 ## Important Notes
 
 - Requires microphone permissions (`--allow-all` flag)
-- Uses local AI endpoint at `http://192.168.1.141:1234/v1/` by default
+- Supports multiple AI providers: local models, OpenAI, and Google Gemini
+- Uses local AI endpoint at `http://192.168.1.141:1234/v1/` by default for local models
 - Conversation history is maintained with 20-message limit
 - Supports both individual light control and area-based control
 - Tool calling enables direct Home Assistant API interactions

@@ -30,7 +30,17 @@ cd parakeet
 ```env
 HOME_ASSISTANT_URL=http://homeassistant.local:8123
 HOME_ASSISTANT_TOKEN=your_long_lived_access_token
-OPENAI_API_KEY=optional_key_for_local_models
+
+# Optional: Choose AI model (default: local/qwen3-1.7b)
+MODEL_ID=local/deepseek-r1-distill-qwen-7b
+
+# For OpenAI models:
+# MODEL_ID=openai/gpt-4.1-nano
+# OPENAI_API_KEY=your_openai_api_key
+
+# For Google models:
+# MODEL_ID=google/gemini-2.5-flash
+# GOOGLE_API_KEY=your_google_api_key
 ```
 
 3. Install dependencies:
@@ -50,21 +60,44 @@ Or run directly:
 deno run --allow-all --env-file=.env main.ts
 ```
 
+List available AI models:
+```bash
+deno run --allow-all --env-file=.env main.ts --list-models
+```
+
 ## Configuration
 
 ### Environment Variables
 
 - `HOME_ASSISTANT_URL`: Your Home Assistant instance URL (default: `http://homeassistant.local:8123`)
 - `HOME_ASSISTANT_TOKEN`: Long-lived access token from Home Assistant
-- `OPENAI_API_KEY`: Optional, defaults to empty string for local models
+- `MODEL_ID`: Choose AI model (see available models with `--list-models`)
+- `LOCAL_AI_URL`: Override local AI server URL (optional)
+- `OPENAI_API_KEY`: Required for OpenAI models
+- `GOOGLE_API_KEY`: Required for Google Gemini models
 
-### AI Model
+### AI Models
 
-The AI model configuration can be modified in `config.ts`. Default model: `qwen/qwen3-8b`
+The application supports multiple AI providers:
 
-### Local AI Endpoint
+**Local Models** (default):
+- `local/qwen3-1.7b` - Fast, good for basic tasks
+- `local/deepseek-r1-distill-qwen-7b` - Advanced reasoning
+- `local/gemma-2-9b` - Google's Gemma model
+- `local/mistral-nemo` - Mistral's efficient model
 
-By default, uses local endpoint at `http://192.168.1.141:1234/v1/`
+**OpenAI Models** (requires API key):
+- `openai/gpt-4.1-nano` - Fastest and cheapest ($0.10/1M input, $0.40/1M output)
+- `openai/gpt-4.1-mini` - Fast, beats GPT-4o ($0.40/1M input, $1.60/1M output)
+- `openai/gpt-4.1` - Latest with improved coding ($2/1M input, $8/1M output)
+- `openai/gpt-4o` - Previous generation model
+- `openai/gpt-4o-mini` - Previous generation fast model ($0.15/1M input, $0.60/1M output)
+
+**Google Models** (requires API key):
+- `google/gemini-2.5-flash` - Best price-to-performance with thinking capabilities
+- `google/gemini-2.0-flash` - Fast Gemini 2.0 with multimodal capabilities
+- `google/gemini-1.5-flash` - Previous generation fast model (1M context)
+- `google/gemini-1.5-pro` - Advanced with 2M context
 
 ## Architecture
 
