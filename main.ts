@@ -4,6 +4,7 @@ import { abort, analyse } from "./ai.ts";
 import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
 import { getActiveModelConfig, listAvailableModels } from "./modelConfig.ts";
+import { detectUtteranceContinuation, cancelAndRollback } from "./generationTracker.ts";
 
 await logger.sessionStart();
 
@@ -82,6 +83,21 @@ async function parrot(): Promise<void> {
         return;
       }
       
+      // Check for utterance continuation (same utterance ID, new/longer text)
+      if (detectUtteranceContinuation(id, text)) {
+        await logger.info("VOICE", "Detected utterance continuation - cancelling and rolling back", { 
+          utteranceId: id, 
+          newText: text 
+        });
+        
+        const rollbackSuccess = await cancelAndRollback("Utterance continuation detected");
+        if (rollbackSuccess) {
+          await logger.info("VOICE", "Rollback successful, processing updated command", { text });
+        } else {
+          await logger.error("VOICE", "Rollback failed, processing updated command anyway", { text });
+        }
+      }
+      
       processedUtteranceIds.add(id);
       const lowerText = text.toLowerCase();
       
@@ -121,7 +137,7 @@ async function parrot(): Promise<void> {
           await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
           
           try {
-            const aiResult = await analyse(commandText, tools);
+            const aiResult = await analyse(commandText, tools, id);
             await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
             await logger.info("AI_OUTPUT", aiResult);
           } catch (error) {
@@ -139,7 +155,7 @@ async function parrot(): Promise<void> {
         await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
         
         try {
-          const aiResult = await analyse(commandText, tools);
+          const aiResult = await analyse(commandText, tools, id);
           await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
           await logger.info("AI_OUTPUT", aiResult);
         } catch (error) {
@@ -174,6 +190,22 @@ async function parrot(): Promise<void> {
         timestamp: now,
         timeSinceLastPartial: lastPartialTime ? now - lastPartialTime : 0
       });
+      
+      // Check for utterance continuation in partials too
+      if (detectUtteranceContinuation(id, text)) {
+        await logger.info("VOICE", "Detected utterance continuation in partial - cancelling and rolling back", { 
+          utteranceId: id, 
+          newText: text 
+        });
+        
+        const rollbackSuccess = await cancelAndRollback("Partial utterance continuation detected");
+        if (rollbackSuccess) {
+          await logger.info("VOICE", "Partial rollback successful", { text });
+        } else {
+          await logger.error("VOICE", "Partial rollback failed", { text });
+        }
+      }
+      
       lastPartialTime = now;
       lastPartialText = text;
       
@@ -237,7 +269,7 @@ async function parrot(): Promise<void> {
             await logger.info("VOICE_DISPLAY", `Channel ${channel}: ${commandText}`);
             
             try {
-              const aiResult = await analyse(commandText, tools);
+              const aiResult = await analyse(commandText, tools, partialId);
               await logger.info("AI", "AI analysis completed", { input: commandText, output: aiResult });
               await logger.info("AI_OUTPUT", aiResult);
             } catch (error) {

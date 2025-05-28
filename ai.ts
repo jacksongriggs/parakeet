@@ -7,6 +7,7 @@ import type { Message } from "./types.ts";
 import { logger } from "./logger.ts";
 import { getActiveModelConfig, type ModelConfig } from "./modelConfig.ts";
 import { formatUsageWithCost } from "./costCalculator.ts";
+import { startGeneration, completeGeneration } from "./generationTracker.ts";
 
 export let abortController = new AbortController();
 
@@ -52,8 +53,11 @@ export function abort() {
   }
 }
 
-export async function analyse(text: string, tools: Record<string, Tool>): Promise<string> {
+export async function analyse(text: string, tools: Record<string, Tool>, utteranceId?: string): Promise<string> {
   await logger.debug("AI", "Starting analysis", { input: text, toolCount: Object.keys(tools).length });
+  
+  // Start tracking this generation
+  startGeneration(utteranceId || `manual_${Date.now()}`, text, abortController);
   
   // Add user message to history
   conversationHistory.push({
@@ -244,6 +248,9 @@ export async function analyse(text: string, tools: Record<string, Tool>): Promis
       });
     }
 
+    // Mark generation as completed successfully
+    completeGeneration();
+    
     return result;
   } catch (err) {
     if ((err as Error).name === "AbortError") {
