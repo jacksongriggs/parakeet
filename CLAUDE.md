@@ -5,9 +5,9 @@ code in this repository.
 
 ## Project Overview
 
-Parakeet is a Deno-based voice-controlled Home Assistant application that 
+Parakeet is a Deno-based voice-controlled smart home application that 
 captures voice commands through ParrotStreamSDK and executes smart home 
-automation tasks via the Home Assistant API.
+automation tasks via the Home Assistant API and music control via Spotify/AirPlay 2.
 
 ## Architecture
 
@@ -22,15 +22,20 @@ The application consists of:
 - **types.ts**: TypeScript type definitions
 - **logger.ts**: Session-based logging system
 - **costCalculator.ts**: Token usage and cost tracking for AI requests
+- **tts.ts**: Text-to-speech integration for voice responses
+- **spotify.ts**: Spotify API integration for music control (planned)
+- **airplay.ts**: AirPlay 2 multi-room audio control via Airfoil (planned)
 
 Key functionality:
 - Captures microphone audio through ParrotStreamSDK with real-time transcription
 - Processes voice commands using AI with tool calling capabilities
 - Controls Home Assistant devices (lights, switches, etc.) via REST API
+- Voice-controlled music playback via Spotify API and AirPlay 2 multi-room audio
 - Maintains conversation history for context-aware interactions
 - Supports area-based and individual device control
 - Wake word activation system ("polly" by default)
 - Cost tracking and usage statistics for AI model calls
+- Text-to-speech responses for user feedback
 
 Key dependencies:
 
@@ -81,6 +86,9 @@ Environment variables (set in `.env` file):
 - `LOCAL_AI_URL`: Override default local AI server URL (optional)
 - `OPENAI_API_KEY`: Required for OpenAI models
 - `GOOGLE_API_KEY`: Required for Google Gemini models
+- `SPOTIFY_CLIENT_ID`: Spotify API client ID for music control (optional)
+- `SPOTIFY_CLIENT_SECRET`: Spotify API client secret for music control (optional)
+- `AIRFOIL_ENABLED`: Enable AirPlay 2 multi-room audio via Airfoil (optional)
 
 ## Architecture Details
 
@@ -100,7 +108,8 @@ Environment variables (set in `.env` file):
 ### Tool System
 - Tools defined in tools.ts using Vercel AI SDK format
 - Each tool has description, zod schema parameters, and execute function
-- Tools include: setLightState, getLightStatus, setClimateControl, getClimateStatus, getAllEntities
+- Home Assistant tools: setLightState, getLightStatus, setClimateControl, getClimateStatus, getAllEntities
+- Music control tools: playMusic, controlPlayback, getMusicStatus (planned)
 - Tool calls are logged and executed asynchronously
 
 ### Home Assistant Integration
@@ -130,10 +139,18 @@ Environment variables (set in `.env` file):
 
 ## Current Integration Plan
 
+### Home Assistant Expansion
 - Exploring gradual expansion of Home Assistant device support
 - Planning to add more complex multi-device and scene-based interactions
 - Investigating improved natural language understanding for command parsing
 - Developing more sophisticated error handling and user feedback mechanisms
+
+### Music Control System (Priority)
+- **Phase 1**: Basic Spotify API integration for search and playback control
+- **Phase 2**: AirPlay 2 multi-room audio via Airfoil + AppleScript automation
+- **Phase 3**: Advanced features like smart device grouping and playlist learning
+- **Phase 4**: Integration with Home Assistant scenes and optimization
+- See `docs/MUSIC_CONTROL_DESIGN.md` for detailed implementation plan
 
 - Never run the program directly, ask the user to do it
 

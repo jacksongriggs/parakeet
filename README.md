@@ -1,15 +1,17 @@
 # Parakeet
 
-A voice-controlled Home Assistant application that captures voice commands and executes smart home automation tasks.
+A voice-controlled smart home application that captures voice commands and executes smart home automation tasks via Home Assistant and music control via Spotify/AirPlay 2.
 
 ## Features
 
 - 🎤 Real-time voice capture and transcription via ParrotStreamSDK
 - 🤖 AI-powered natural language processing for voice commands
 - 🏠 Home Assistant integration for device control
+- 🎵 Music control via Spotify API and AirPlay 2 multi-room audio
 - 💡 Control lights, switches, and other smart home devices
 - 🗣️ Context-aware conversations with history tracking
 - 🏢 Area-based and individual device control
+- 🔊 Text-to-speech responses for user feedback
 
 ## Prerequisites
 
@@ -75,6 +77,9 @@ deno run --allow-all --env-file=.env main.ts --list-models
 - `LOCAL_AI_URL`: Override local AI server URL (optional)
 - `OPENAI_API_KEY`: Required for OpenAI models
 - `GOOGLE_API_KEY`: Required for Google Gemini models
+- `SPOTIFY_CLIENT_ID`: Spotify API client ID for music control (optional)
+- `SPOTIFY_CLIENT_SECRET`: Spotify API client secret for music control (optional)
+- `AIRFOIL_ENABLED`: Enable AirPlay 2 multi-room audio via Airfoil (optional)
 
 ### AI Models
 
@@ -105,9 +110,13 @@ The application supports multiple AI providers:
 - **ai.ts**: AI streaming and conversation management
 - **tools.ts**: Home Assistant device control tools
 - **homeAssistant.ts**: Home Assistant API integration
+- **tts.ts**: Text-to-speech integration
 - **config.ts**: Configuration constants
 - **types.ts**: TypeScript definitions
 - **logger.ts**: Logging utilities
+- **Music Control** (planned):
+  - **spotify.ts**: Spotify API integration
+  - **airplay.ts**: AirPlay 2 multi-room audio control
 
 ## Development
 
