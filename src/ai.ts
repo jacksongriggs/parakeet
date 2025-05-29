@@ -192,6 +192,14 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
             content: assistantContent,
             timestamp: new Date()
           });
+        } else if (stepResult.text) {
+          // Only add text-only responses to history if there are no tool calls
+          // This prevents duplication when the final result already includes all text
+          conversationHistory.push({
+            role: "assistant",
+            content: stepResult.text,
+            timestamp: new Date()
+          });
         }
         
         // Store tool results in conversation history  
@@ -230,6 +238,9 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
       result += part;
       tokenCount++;
     }
+    
+    // Clean up any duplicated text that might occur from step processing
+    result = result.trim();
 
     await logger.debug("AI", "AI response generated", { 
       outputLength: result.length, 
@@ -237,12 +248,15 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
       conversationLength: conversationHistory.length 
     });
 
-    // Add final assistant response if no tool calls were made
+    // Only add final assistant response if it's different from the last message
+    // This prevents duplication from step processing
     const lastMessage = conversationHistory[conversationHistory.length - 1];
-    if (!lastMessage || lastMessage.role !== "assistant" || 
-        (typeof lastMessage.content === "string" || 
-         !Array.isArray(lastMessage.content) || 
-         !lastMessage.content.some((c: any) => c.type === "tool-call"))) {
+    const shouldAddFinalResponse = !lastMessage || 
+      lastMessage.role !== "assistant" || 
+      (typeof lastMessage.content === "string" && lastMessage.content !== result) ||
+      (Array.isArray(lastMessage.content) && !lastMessage.content.some((c: any) => c.type === "tool-call"));
+    
+    if (shouldAddFinalResponse && result.trim()) {
       conversationHistory.push({
         role: "assistant",
         content: result,
