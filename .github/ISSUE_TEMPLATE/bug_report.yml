@@ -1,0 +1,82 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: ex. email@example.com
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: Version
+      description: What version of Parakeet are you running?
+      options:
+        - main (latest)
+        - v1.0
+        - v1.1
+        - v2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ai-model
+    attributes:
+      label: AI Model
+      description: Which AI model were you using when the bug occurred?
+      options:
+        - local/qwen3-1.7b
+        - local/deepseek-r1-distill-qwen-7b
+        - local/gemma-2-9b
+        - local/mistral-nemo
+        - openai/gpt-4.1-nano
+        - openai/gpt-4.1-mini
+        - openai/gpt-4.1
+        - openai/gpt-4o
+        - openai/gpt-4o-mini
+        - google/gemini-2.5-flash
+        - google/gemini-2.0-flash
+        - google/gemini-1.5-flash
+        - google/gemini-1.5-pro
+        - google/gemini-1.5-flash-8b
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our [Code of Conduct](https://example.com)
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true
