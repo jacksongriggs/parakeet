@@ -1,0 +1,80 @@
+{
+  "source": "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/ContentView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Parakeet Voice",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 16
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connected to Parakeet",
+        "location": {
+          "startingColumn": 39,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Disconnected",
+        "location": {
+          "startingColumn": 65,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 61
+        }
+      },
+      {
+        "comment": "",
+        "key": "Listening...",
+        "location": {
+          "startingColumn": 50,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap to Speak",
+        "location": {
+          "startingColumn": 67,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Your Command:",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 114
+        }
+      },
+      {
+        "comment": "",
+        "key": "Parakeet Response:",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 133
+        }
+      },
+      {
+        "comment": "",
+        "key": "Processing...",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 151
+        }
+      }
+    ]
+  },
+  "version": 1
+}

@@ -1,5 +1,5 @@
 import { ParrotStreamSDK } from "@parrot/sdk";
-import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT_MS, USE_PARTIAL_RESULTS, PARTIAL_TIMEOUT } from "./config.ts";
+import { HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN, WAKE_WORD, WAKE_WORD_TIMEOUT_MS, USE_PARTIAL_RESULTS, PARTIAL_TIMEOUT, HTTP_SERVER_PORT, HTTP_SERVER_ENABLED } from "./config.ts";
 import { abort, analyse } from "./ai.ts";
 import { tools } from "./tools.ts";
 import { logger } from "./logger.ts";
@@ -7,11 +7,31 @@ import { getActiveModelConfig, listAvailableModels } from "./modelConfig.ts";
 import { detectUtteranceContinuation, cancelAndRollback } from "./generationTracker.ts";
 import { initializeTTS, speak, stopSpeaking } from "./tts.ts";
 import { updateAllTimeCosts } from "./costCalculator.ts";
+import { VoiceCommandServer } from "./httpServer.ts";
 
 await logger.sessionStart();
 
 // Initialize TTS
 initializeTTS();
+
+// Start HTTP server for iOS app integration
+let httpServer: VoiceCommandServer | null = null;
+if (HTTP_SERVER_ENABLED) {
+  try {
+    httpServer = new VoiceCommandServer(HTTP_SERVER_PORT);
+    await httpServer.start();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("MAIN", "Failed to start HTTP server - continuing without HTTP API", { 
+      error: errorMessage,
+      port: HTTP_SERVER_PORT,
+      note: "Voice recognition will still work normally"
+    });
+    httpServer = null; // Reset to null so we don't try to stop it later
+  }
+} else {
+  await logger.info("HTTP_SERVER", "HTTP server disabled in configuration");
+}
 
 // Show model configuration
 const modelConfig = getActiveModelConfig();
@@ -19,7 +39,9 @@ await logger.info("CONFIG", "Environment configuration", {
   HOME_ASSISTANT_URL,
   HOME_ASSISTANT_TOKEN: HOME_ASSISTANT_TOKEN ? "Token is set" : "Token is empty",
   AI_MODEL: `${modelConfig.provider}/${modelConfig.model}`,
-  MODEL_DESCRIPTION: modelConfig.description
+  MODEL_DESCRIPTION: modelConfig.description,
+  HTTP_SERVER_ENABLED: HTTP_SERVER_ENABLED ? `Yes (port ${HTTP_SERVER_PORT})` : "No",
+  TTS_ENABLED: Deno.env.get("TTS_ENABLED") !== "false" ? "Yes" : "No"
 });
 
 // Show available models if requested
@@ -31,6 +53,9 @@ if (Deno.args.includes("--list-models")) {
 // Handle graceful shutdown
 const shutdown = async () => {
   await logger.info("MAIN", "Shutting down gracefully...");
+  if (httpServer) {
+    await httpServer.stop();
+  }
   await updateAllTimeCosts();
   await logger.sessionEnd();
   Deno.exit(0);

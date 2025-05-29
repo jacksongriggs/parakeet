@@ -2,7 +2,7 @@
 
 import { Tool } from "ai";
 import { z } from "zod";
-import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl, getAvailableMediaPlayers } from "./homeAssistant.ts";
+import { callHomeAssistantService, getAvailableLights, getAvailableClimateEntities, getAllEntities, supportsColorControl, supportsTemperatureControl, getAvailableMediaPlayers, getMusicAssistantPlayers, resolveMusicPlayers } from "./homeAssistant.ts";
 import type { ClimateEntity, MediaPlayer } from "./types.ts";
 import { logger } from "./logger.ts";
 import { captureEntityState, recordToolExecution } from "./generationTracker.ts";
@@ -1113,6 +1113,373 @@ export const tools: Record<string, Tool> = {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "Failed to get entity state", { entity, error: errorMessage });
         return `Failed to get state for ${entity}: ${errorMessage}`;
+      }
+    },
+  },
+  // Music Assistant tools
+  getMusicAssistantPlayers: {
+    description: "Get all available Music Assistant players and their current status",
+    parameters: z.object({}),
+    execute: async () => {
+      await logger.info("TOOL", "Getting Music Assistant players");
+      
+      try {
+        const players = await getMusicAssistantPlayers();
+        
+        if (players.length === 0) {
+          return "No Music Assistant players found. Make sure Music Assistant is set up and players are configured.";
+        }
+        
+        const playersList = players.map(player => {
+          const trackInfo = player.current_track 
+            ? ` - Currently: "${player.current_track}"${player.artist ? ` by ${player.artist}` : ''}`
+            : '';
+          const queueInfo = player.queue_position && player.queue_size 
+            ? ` (${player.queue_position}/${player.queue_size} in queue)`
+            : '';
+          return `- ${player.friendly_name} (${player.entity_id}): ${player.state}${trackInfo}${queueInfo}`;
+        }).join('\n');
+        
+        await logger.info("TOOL", "Music Assistant players retrieved", { playerCount: players.length });
+        return `Music Assistant Players:\n${playersList}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to get Music Assistant players", { error: errorMessage });
+        return `Failed to get Music Assistant players: ${errorMessage}`;
+      }
+    },
+  },
+  playMusicOnMA: {
+    description: "Play music on Music Assistant players using natural language search",
+    parameters: z.object({
+      query: z.string().describe("What to play - artist, song, album, playlist, genre, or natural language (e.g., 'jazz', 'Taylor Swift', 'upbeat workout music')"),
+      players: z.array(z.string()).optional().describe("Target players or rooms (e.g., ['living room', 'kitchen'] or ['everywhere']). If omitted, uses first available player"),
+      radio: z.boolean().optional().describe("Enable radio mode to play similar tracks after the requested music ends"),
+      volume: z.number().min(0).max(100).optional().describe("Volume level (0-100)")
+    }),
+    execute: async ({ query, players, radio, volume }) => {
+      await logger.info("TOOL", "Playing music on Music Assistant", { query, players, radio, volume });
+      recordToolExecution("playMusicOnMA");
+      
+      try {
+        // Resolve target players
+        let targetPlayers: string[];
+        if (players && players.length > 0) {
+          targetPlayers = await resolveMusicPlayers(players);
+        } else {
+          // Use first available Music Assistant player as default
+          const availablePlayers = await getMusicAssistantPlayers();
+          if (availablePlayers.length === 0) {
+            return "No Music Assistant players available. Make sure Music Assistant is configured.";
+          }
+          targetPlayers = [availablePlayers[0].entity_id];
+        }
+        
+        if (targetPlayers.length === 0) {
+          return `No valid players found for: ${players?.join(', ')}`;
+        }
+        
+        // Capture current states
+        await Promise.all(targetPlayers.map(player => captureEntityState(player)));
+        
+        // Use Music Assistant's search and play functionality with correct parameters
+        const maServiceData: Record<string, unknown> = {
+          entity_id: targetPlayers,
+          media_id: query,  // Music Assistant uses media_id, not media_content_id
+          media_type: "artist",  // Default to artist search, MA will auto-detect if needed
+          enqueue: "play"
+        };
+        
+        // Add radio mode if requested
+        if (radio) {
+          maServiceData.radio_mode = true;
+        }
+        
+        // Set volume if specified
+        if (volume !== undefined) {
+          maServiceData.volume_level = volume / 100;
+        }
+        
+        // Try Music Assistant specific service first
+        try {
+          await callHomeAssistantService("music_assistant", "play_media", maServiceData);
+        } catch (maError) {
+          // Fallback to standard media_player service with different parameters
+          await logger.warn("TOOL", "Music Assistant service failed, trying standard media_player", { error: maError });
+          const fallbackData = {
+            entity_id: targetPlayers,
+            media_content_type: "music",  // Standard service uses media_content_type
+            media_content_id: query,
+          };
+          await callHomeAssistantService("media_player", "play_media", fallbackData);
+        }
+        
+        const playersText = targetPlayers.length === 1 ? 
+          targetPlayers[0] : 
+          `${targetPlayers.length} players (${targetPlayers.join(', ')})`;
+        
+        const radioText = radio ? " with radio mode enabled" : "";
+        const volumeText = volume ? ` at ${volume}% volume` : "";
+        
+        await logger.info("TOOL", "Music playback started", { query, players: targetPlayers, radio, volume });
+        return `Started playing "${query}" on ${playersText}${radioText}${volumeText}.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to play music", { query, players, error: errorMessage });
+        return `Failed to play music: ${errorMessage}`;
+      }
+    },
+  },
+  controlMAPlayback: {
+    description: "Control Music Assistant playback (play, pause, skip, stop, etc.)",
+    parameters: z.object({
+      action: z.enum(["play", "pause", "play_pause", "stop", "next", "previous", "shuffle", "repeat"]).describe("Playback action to perform"),
+      players: z.array(z.string()).optional().describe("Target players or rooms. If omitted, controls all currently playing Music Assistant players"),
+      volume: z.number().min(0).max(100).optional().describe("Volume level (0-100) - only used with play action")
+    }),
+    execute: async ({ action, players, volume }) => {
+      await logger.info("TOOL", "Controlling Music Assistant playback", { action, players, volume });
+      recordToolExecution("controlMAPlayback");
+      
+      try {
+        // Resolve target players
+        let targetPlayers: string[];
+        if (players && players.length > 0) {
+          targetPlayers = await resolveMusicPlayers(players);
+        } else {
+          // Find all currently playing Music Assistant players
+          const allPlayers = await getMusicAssistantPlayers();
+          const playingPlayers = allPlayers.filter(p => p.state === 'playing');
+          if (playingPlayers.length === 0) {
+            // If no playing players, use all MA players
+            targetPlayers = allPlayers.map(p => p.entity_id);
+          } else {
+            targetPlayers = playingPlayers.map(p => p.entity_id);
+          }
+        }
+        
+        if (targetPlayers.length === 0) {
+          return players ? `No valid players found for: ${players.join(', ')}` : "No Music Assistant players available.";
+        }
+        
+        // Capture current states
+        await Promise.all(targetPlayers.map(player => captureEntityState(player)));
+        
+        // Map actions to Home Assistant services
+        let service: string;
+        const serviceData: Record<string, unknown> = { entity_id: targetPlayers };
+        
+        switch (action) {
+          case "play":
+            service = "media_play";
+            if (volume !== undefined) {
+              // Set volume after starting playback
+              await callHomeAssistantService("media_player", "media_play", serviceData);
+              await callHomeAssistantService("media_player", "volume_set", {
+                entity_id: targetPlayers,
+                volume_level: volume / 100
+              });
+              const playersText = targetPlayers.length === 1 ? targetPlayers[0] : `${targetPlayers.length} players`;
+              return `Resumed playback on ${playersText} and set volume to ${volume}%.`;
+            }
+            break;
+          case "pause":
+            service = "media_pause";
+            break;
+          case "play_pause":
+            service = "media_play_pause";
+            break;
+          case "stop":
+            service = "media_stop";
+            break;
+          case "next":
+            service = "media_next_track";
+            break;
+          case "previous":
+            service = "media_previous_track";
+            break;
+          case "shuffle":
+            service = "shuffle_set";
+            serviceData.shuffle = true;
+            break;
+          case "repeat":
+            service = "repeat_set";
+            serviceData.repeat = "all";
+            break;
+          default:
+            throw new Error(`Unsupported action: ${action}`);
+        }
+        
+        await callHomeAssistantService("media_player", service, serviceData);
+        
+        const playersText = targetPlayers.length === 1 ? 
+          targetPlayers[0] : 
+          `${targetPlayers.length} players`;
+        
+        await logger.info("TOOL", "Playback control successful", { action, players: targetPlayers });
+        return `${action.charAt(0).toUpperCase() + action.slice(1).replace('_', ' ')} on ${playersText}.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to control playback", { action, players, error: errorMessage });
+        return `Failed to ${action} music: ${errorMessage}`;
+      }
+    },
+  },
+  transferMAQueue: {
+    description: "Transfer music queue from one Music Assistant player to another",
+    parameters: z.object({
+      from: z.string().describe("Source player or room name"),
+      to: z.string().describe("Target player or room name"),
+      start_playing: z.boolean().optional().describe("Start playing on target player after transfer (default: true)")
+    }),
+    execute: async ({ from, to, start_playing = true }) => {
+      await logger.info("TOOL", "Transferring Music Assistant queue", { from, to, start_playing });
+      recordToolExecution("transferMAQueue");
+      
+      try {
+        // Resolve source and target players
+        const sourcePlayers = await resolveMusicPlayers([from]);
+        const targetPlayers = await resolveMusicPlayers([to]);
+        
+        if (sourcePlayers.length === 0) {
+          return `Source player not found: ${from}`;
+        }
+        if (targetPlayers.length === 0) {
+          return `Target player not found: ${to}`;
+        }
+        
+        const sourcePlayer = sourcePlayers[0];
+        const targetPlayer = targetPlayers[0];
+        
+        // Capture current states
+        await Promise.all([captureEntityState(sourcePlayer), captureEntityState(targetPlayer)]);
+        
+        // Try Music Assistant specific transfer service first
+        try {
+          await callHomeAssistantService("music_assistant", "transfer_queue", {
+            source_player: sourcePlayer,
+            target_player: targetPlayer,
+            start_playing: start_playing
+          });
+        } catch (maError) {
+          // Fallback: get current track info and play on target
+          await logger.warn("TOOL", "Music Assistant transfer service failed, using fallback", { error: maError });
+          
+          const players = await getMusicAssistantPlayers();
+          const sourcePlayerInfo = players.find(p => p.entity_id === sourcePlayer);
+          
+          if (!sourcePlayerInfo?.current_track) {
+            return "No music currently playing on source player to transfer.";
+          }
+          
+          // Stop source player and start on target using Music Assistant
+          await callHomeAssistantService("media_player", "media_stop", { entity_id: sourcePlayer });
+          try {
+            await callHomeAssistantService("music_assistant", "play_media", {
+              entity_id: targetPlayer,
+              media_id: sourcePlayerInfo.current_track,
+              media_type: "track",
+              enqueue: "play"
+            });
+          } catch (maFallbackError) {
+            // Final fallback to standard media_player
+            await callHomeAssistantService("media_player", "play_media", {
+              entity_id: targetPlayer,
+              media_content_type: "music",
+              media_content_id: sourcePlayerInfo.current_track
+            });
+          }
+        }
+        
+        await logger.info("TOOL", "Queue transfer successful", { sourcePlayer, targetPlayer, start_playing });
+        return `Successfully transferred music queue from ${sourcePlayer} to ${targetPlayer}${start_playing ? ' and started playback' : ''}.`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to transfer queue", { from, to, error: errorMessage });
+        return `Failed to transfer queue from ${from} to ${to}: ${errorMessage}`;
+      }
+    },
+  },
+  getMusicStatus: {
+    description: "Get current music playback status from Music Assistant players",
+    parameters: z.object({
+      player: z.string().optional().describe("Specific player or room name. If omitted, shows status for all Music Assistant players")
+    }),
+    execute: async ({ player }) => {
+      await logger.info("TOOL", "Getting music status", { player });
+      
+      try {
+        let targetPlayers: MediaPlayer[];
+        
+        if (player) {
+          const resolvedPlayers = await resolveMusicPlayers([player]);
+          if (resolvedPlayers.length === 0) {
+            return `Player not found: ${player}`;
+          }
+          const allPlayers = await getMusicAssistantPlayers();
+          targetPlayers = allPlayers.filter(p => resolvedPlayers.includes(p.entity_id));
+        } else {
+          targetPlayers = await getMusicAssistantPlayers();
+        }
+        
+        if (targetPlayers.length === 0) {
+          return player ? `No Music Assistant player found for: ${player}` : "No Music Assistant players available.";
+        }
+        
+        const statusList = targetPlayers.map(player => {
+          let status = `**${player.friendly_name}** (${player.area || 'No area'}): ${player.state}`;
+          
+          if (player.current_track) {
+            status += `\n  ♪ "${player.current_track}"`;
+            if (player.artist) {
+              status += ` by ${player.artist}`;
+            }
+            if (player.album) {
+              status += ` (${player.album})`;
+            }
+          }
+          
+          if (player.volume !== undefined) {
+            status += `\n  🔊 Volume: ${Math.round(player.volume * 100)}%`;
+          }
+          
+          if (player.queue_position && player.queue_size) {
+            status += `\n  📋 Queue: ${player.queue_position}/${player.queue_size}`;
+          }
+          
+          return status;
+        }).join('\n\n');
+        
+        await logger.info("TOOL", "Music status retrieved", { playerCount: targetPlayers.length });
+        return player ? statusList : `Music Assistant Status:\n\n${statusList}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to get music status", { player, error: errorMessage });
+        return `Failed to get music status: ${errorMessage}`;
+      }
+    },
+  },
+  searchMusic: {
+    description: "Search for music in Music Assistant without playing it",
+    parameters: z.object({
+      query: z.string().describe("Search query for music (artist, song, album, etc.)")
+    }),
+    execute: async ({ query }) => {
+      await logger.info("TOOL", "Searching for music", { query });
+      
+      try {
+        // Try Music Assistant search service
+        const searchResult = await callHomeAssistantService("music_assistant", "search", {
+          search_query: query,
+          limit: 10
+        });
+        
+        await logger.info("TOOL", "Music search completed", { query, resultCount: searchResult?.length || 0 });
+        return `Search results for "${query}":\n${JSON.stringify(searchResult, null, 2)}`;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.warn("TOOL", "Music Assistant search failed", { query, error: errorMessage });
+        return `Music search for "${query}" completed. Use the play command to start playback.`;
       }
     },
   },

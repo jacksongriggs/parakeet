@@ -1,0 +1,58 @@
+{
+  "" : {
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetVoice-master.dia",
+    "emit-module-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetVoice-master-emit-module.d",
+    "emit-module-diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetVoice-master-emit-module.dia",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetVoice-master.swiftdeps"
+  },
+  "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/App.swift" : {
+    "const-values" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.swiftconstvalues",
+    "dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.d",
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.dia",
+    "index-unit-output-path" : "/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.o",
+    "llvm-bc" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.bc",
+    "object" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.o",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App.swiftdeps",
+    "swiftmodule" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/App~partial.swiftmodule"
+  },
+  "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/ContentView.swift" : {
+    "const-values" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/ParakeetClient.swift" : {
+    "const-values" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.swiftconstvalues",
+    "dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.d",
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.dia",
+    "index-unit-output-path" : "/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.o",
+    "llvm-bc" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.bc",
+    "object" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.o",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient.swiftdeps",
+    "swiftmodule" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/ParakeetClient~partial.swiftmodule"
+  },
+  "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/SettingsView.swift" : {
+    "const-values" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.swiftconstvalues",
+    "dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.d",
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.dia",
+    "index-unit-output-path" : "/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.o",
+    "llvm-bc" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.bc",
+    "object" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.o",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView.swiftdeps",
+    "swiftmodule" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SettingsView~partial.swiftmodule"
+  },
+  "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/SpeechManager.swift" : {
+    "const-values" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.swiftconstvalues",
+    "dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.d",
+    "diagnostics" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.dia",
+    "index-unit-output-path" : "/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.o",
+    "llvm-bc" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.bc",
+    "object" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.o",
+    "swift-dependencies" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager.swiftdeps",
+    "swiftmodule" : "/Users/jackson/Projects/Parakeet/ios/build/ParakeetVoice.build/Debug-iphonesimulator/ParakeetVoice.build/Objects-normal/arm64/SpeechManager~partial.swiftmodule"
+  }
+}

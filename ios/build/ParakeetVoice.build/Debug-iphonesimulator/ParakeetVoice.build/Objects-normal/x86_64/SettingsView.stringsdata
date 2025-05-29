@@ -1,0 +1,200 @@
+{
+  "source": "/Users/jackson/Projects/Parakeet/ios/ParakeetVoice/SettingsView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Settings",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 73
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connection Test",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Server Configuration",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 13
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connection Status",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 30
+        }
+      },
+      {
+        "comment": "",
+        "key": "How to Find Your Mac's IP",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 47
+        }
+      },
+      {
+        "comment": "",
+        "key": "Troubleshooting",
+        "location": {
+          "startingColumn": 38,
+          "startingLine": 62
+        }
+      },
+      {
+        "comment": "",
+        "key": "Parakeet Server URL",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 15
+        }
+      },
+      {
+        "comment": "",
+        "key": "Enter your Mac's IP address and port 3001",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 24
+        }
+      },
+      {
+        "comment": "",
+        "key": "http://192.168.1.100:3001",
+        "location": {
+          "startingColumn": 35,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connected",
+        "location": {
+          "startingColumn": 59,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "Disconnected",
+        "location": {
+          "startingColumn": 73,
+          "startingLine": 36
+        }
+      },
+      {
+        "comment": "",
+        "key": "Test",
+        "location": {
+          "startingColumn": 32,
+          "startingLine": 40
+        }
+      },
+      {
+        "comment": "",
+        "key": "1. Open Terminal on your Mac",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 49
+        }
+      },
+      {
+        "comment": "",
+        "key": "2. Run: ifconfig | grep 'inet ' | grep -v 127.0.0.1",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 50
+        }
+      },
+      {
+        "comment": "",
+        "key": "3. Look for an address like 192.168.1.100",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 51
+        }
+      },
+      {
+        "comment": "",
+        "key": "4. Enter it above with :3001 at the end",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 52
+        }
+      },
+      {
+        "comment": "",
+        "key": "Example: http://192.168.1.100:3001",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "• Make sure Parakeet is running on your Mac",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 64
+        }
+      },
+      {
+        "comment": "",
+        "key": "• Ensure iPhone and Mac are on same WiFi",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 65
+        }
+      },
+      {
+        "comment": "",
+        "key": "• Check that port 3001 is not blocked",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 66
+        }
+      },
+      {
+        "comment": "",
+        "key": "• Try pinging your Mac from iPhone",
+        "location": {
+          "startingColumn": 30,
+          "startingLine": 67
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 77
+        }
+      },
+      {
+        "comment": "",
+        "key": "Save",
+        "location": {
+          "startingColumn": 28,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "OK",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 93
+        }
+      }
+    ]
+  },
+  "version": 1
+}

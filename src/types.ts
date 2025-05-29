@@ -27,4 +27,9 @@ export interface MediaPlayer {
   area?: string;
   state: string;
   volume?: number;
+  current_track?: string;
+  artist?: string;
+  album?: string;
+  queue_position?: number;
+  queue_size?: number;
 }

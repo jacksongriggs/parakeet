@@ -306,6 +306,12 @@ export async function getAvailableMediaPlayers(): Promise<MediaPlayer[]> {
       attributes?: { 
         friendly_name?: string;
         volume_level?: number;
+        media_title?: string;
+        media_artist?: string;
+        media_album_name?: string;
+        queue_position?: number;
+        queue_size?: number;
+        [key: string]: unknown;
       };
     }>;
     const mediaPlayerStates = states.filter((state) =>
@@ -322,6 +328,11 @@ export async function getAvailableMediaPlayers(): Promise<MediaPlayer[]> {
           area,
           state: state.state,
           volume: state.attributes?.volume_level,
+          current_track: state.attributes?.media_title,
+          artist: state.attributes?.media_artist,
+          album: state.attributes?.media_album_name,
+          queue_position: state.attributes?.queue_position,
+          queue_size: state.attributes?.queue_size,
         };
       }),
     );
@@ -336,6 +347,130 @@ export async function getAvailableMediaPlayers(): Promise<MediaPlayer[]> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     await logger.error("HA_API", "Failed to fetch media players", { error: errorMessage });
     return mediaPlayersCache; // Return cached data if fetch fails
+  }
+}
+
+// Music Assistant specific functions
+export async function getMusicAssistantPlayers(): Promise<MediaPlayer[]> {
+  await logger.debug("HA_API", "Getting Music Assistant players");
+  
+  try {
+    const allMediaPlayers = await getAvailableMediaPlayers();
+    // Music Assistant integrates with existing players - look for MA integration markers
+    const musicAssistantPlayers = allMediaPlayers.filter(player => {
+      // Check if this player has Music Assistant integration
+      // MA-integrated players have supported_features that include specific capabilities
+      // and may have MA references in their attributes
+      return player.entity_id.includes('music_assistant') || 
+             player.friendly_name.toLowerCase().includes('music assistant') ||
+             // Most HomePods and AirPlay devices integrated with MA have these features
+             (player.entity_id.includes('homepod') || player.entity_id.includes('airplay'));
+    });
+    
+    await logger.info("HA_API", "Found Music Assistant players", { 
+      totalPlayers: allMediaPlayers.length,
+      musicAssistantPlayers: musicAssistantPlayers.length 
+    });
+    
+    return musicAssistantPlayers;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("HA_API", "Failed to get Music Assistant players", { error: errorMessage });
+    return [];
+  }
+}
+
+export async function findMusicAssistantPlayersByArea(area: string): Promise<MediaPlayer[]> {
+  await logger.debug("HA_API", "Finding Music Assistant players by area", { area });
+  
+  try {
+    const musicAssistantPlayers = await getMusicAssistantPlayers();
+    const areaPlayers = musicAssistantPlayers.filter(player => 
+      player.area?.toLowerCase().includes(area.toLowerCase()) ||
+      player.friendly_name.toLowerCase().includes(area.toLowerCase())
+    );
+    
+    await logger.debug("HA_API", "Found area players", { area, count: areaPlayers.length });
+    return areaPlayers;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("HA_API", "Failed to find players by area", { area, error: errorMessage });
+    return [];
+  }
+}
+
+// Helper function to resolve player names from natural language
+export async function resolveMusicPlayers(playerInputs: string[]): Promise<string[]> {
+  await logger.debug("HA_API", "Resolving music players", { playerInputs });
+  
+  try {
+    const musicAssistantPlayers = await getMusicAssistantPlayers();
+    const allMediaPlayers = await getAvailableMediaPlayers();
+    
+    const resolvedPlayers: string[] = [];
+    
+    for (const input of playerInputs) {
+      const normalized = input.toLowerCase();
+      
+      // Special cases
+      if (normalized === 'everywhere' || normalized === 'all') {
+        const allMAPlayers = musicAssistantPlayers.map(p => p.entity_id);
+        resolvedPlayers.push(...allMAPlayers);
+        continue;
+      }
+      
+      // Try exact entity_id match first
+      if (input.includes('.')) {
+        resolvedPlayers.push(input);
+        continue;
+      }
+      
+      // Find by area name in Music Assistant players first
+      const areaPlayers = await findMusicAssistantPlayersByArea(input);
+      if (areaPlayers.length > 0) {
+        resolvedPlayers.push(...areaPlayers.map(p => p.entity_id));
+        continue;
+      }
+      
+      // Find by partial friendly name match in Music Assistant players
+      const nameMatches = musicAssistantPlayers.filter(player => 
+        player.friendly_name.toLowerCase().includes(normalized) ||
+        player.entity_id.toLowerCase().includes(normalized)
+      );
+      
+      if (nameMatches.length > 0) {
+        resolvedPlayers.push(...nameMatches.map(p => p.entity_id));
+        continue;
+      }
+      
+      // Fallback to any media player if no MA players found
+      const fallbackMatches = allMediaPlayers.filter(player => 
+        player.friendly_name.toLowerCase().includes(normalized) ||
+        player.entity_id.toLowerCase().includes(normalized)
+      );
+      
+      if (fallbackMatches.length > 0) {
+        resolvedPlayers.push(...fallbackMatches.map(p => p.entity_id));
+        await logger.info("HA_API", "Using non-MA player as fallback", { input, player: fallbackMatches[0].entity_id });
+      } else {
+        await logger.warn("HA_API", "No player found for input", { input });
+      }
+    }
+    
+    // Remove duplicates
+    const uniquePlayers = [...new Set(resolvedPlayers)];
+    
+    await logger.debug("HA_API", "Player resolution complete", { 
+      inputs: playerInputs, 
+      resolved: uniquePlayers.length,
+      players: uniquePlayers
+    });
+    
+    return uniquePlayers;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await logger.error("HA_API", "Failed to resolve music players", { playerInputs, error: errorMessage });
+    return [];
   }
 }
 

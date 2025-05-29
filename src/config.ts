@@ -44,6 +44,13 @@ export const PARTIAL_TIMEOUT = 1000;
 // Reduces API calls to Home Assistant
 export const CACHE_DURATION = 5;
 
+// ===== HTTP Server Configuration =====
+// Port for the HTTP API server (for iOS app integration)
+export const HTTP_SERVER_PORT = parseInt(Deno.env.get("HTTP_SERVER_PORT") || "3001");
+
+// Enable or disable the HTTP server
+export const HTTP_SERVER_ENABLED = Deno.env.get("HTTP_SERVER_ENABLED") !== "false"; // Default: true
+
 // ===== Text-to-Speech Configuration =====
 
 // Enable or disable TTS for AI responses
