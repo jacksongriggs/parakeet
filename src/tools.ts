@@ -821,11 +821,15 @@ export const tools: Record<string, Tool> = {
       }
     },
   },
-  turnOffAllClimates: {
-    description: "Turn off all climate entities in the home",
-    parameters: z.object({}),
-    execute: async () => {
-      await logger.info("TOOL", "Turning off all climates");
+  setAllClimatesState: {
+    description: "Control all climate entities (ACs, thermostats) in the home - turn on/off, set mode, or set temperature",
+    parameters: z.object({
+      state: z.enum(["on", "off", "heat", "cool", "auto", "heat_cool"]).describe("State to set: on/off or specific HVAC mode"),
+      temperature: z.number().min(10).max(35).optional().describe("Optional target temperature in Celsius (only used with 'on' or HVAC modes)"),
+    }),
+    execute: async ({ state, temperature }) => {
+      await logger.info("TOOL", "Setting all climates state", { state, temperature });
+      recordToolExecution("setAllClimatesState");
       
       try {
         const climateEntities = await getAvailableClimateEntities();
@@ -835,14 +839,38 @@ export const tools: Record<string, Tool> = {
           return "No climate entities found in your Home Assistant instance.";
         }
         
+        // Capture states before making changes
+        await Promise.all(climateEntities.map(entity => captureEntityState(entity.entity_id)));
+        
         const promises = climateEntities.map(async (entity: ClimateEntity) => {
           try {
-            await callHomeAssistantService("climate", "turn_off", {
-              entity_id: entity.entity_id,
-            });
+            let service: string;
+            const serviceData: Record<string, string | number> = { entity_id: entity.entity_id };
+            
+            if (state === "on") {
+              service = "turn_on";
+            } else if (state === "off") {
+              service = "turn_off";
+            } else {
+              service = "set_hvac_mode";
+              serviceData.hvac_mode = state;
+            }
+            
+            await callHomeAssistantService("climate", service, serviceData);
+            
+            // Set temperature if provided and not turning off
+            if (temperature !== undefined && state !== "off") {
+              await callHomeAssistantService("climate", "set_temperature", {
+                entity_id: entity.entity_id,
+                temperature: temperature,
+              });
+            }
+            
             return { success: true, entity_id: entity.entity_id };
           } catch (error) {
-            return { success: false, entity_id: entity.entity_id, error: error instanceof Error ? error.message : String(error) };
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            await logger.error("TOOL", "Climate control failed", { entity_id: entity.entity_id, error: errorMessage });
+            return { success: false, entity_id: entity.entity_id, error: errorMessage };
           }
         });
         
@@ -851,16 +879,18 @@ export const tools: Record<string, Tool> = {
         const failures = results.filter((r: { success: boolean; entity_id: string; error?: string }) => !r.success).map((r: { entity_id: string; error?: string }) => `${r.entity_id}: ${r.error}`);
         
         if (successes.length > 0 && failures.length === 0) {
-          return `Successfully turned off all ${successes.length} climate entities.`;
+          const tempText = temperature && state !== "off" ? ` and set to ${temperature}°C` : "";
+          return `Successfully set all ${successes.length} climate entities to ${state}${tempText}.`;
         } else if (successes.length > 0 && failures.length > 0) {
-          return `Turned off ${successes.join(", ")}. Failed to control: ${failures.join("; ")}`;
+          const tempText = temperature && state !== "off" ? " and set temperature" : "";
+          return `Set ${successes.join(", ")} to ${state}${tempText}. Failed to control: ${failures.join("; ")}`;
         } else {
-          return `Failed to turn off all climate entities: ${failures.join("; ")}`;
+          return `Failed to control all climate entities: ${failures.join("; ")}`;
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        await logger.error("TOOL", "Failed to turn off all climates", { error: errorMessage });
-        return `Failed to turn off all climates: ${errorMessage}`;
+        await logger.error("TOOL", "Failed to control all climates", { error: errorMessage });
+        return `Failed to control all climates: ${errorMessage}`;
       }
     },
   },
@@ -1041,6 +1071,48 @@ export const tools: Record<string, Tool> = {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await logger.error("TOOL", "Failed to get media player status", { entity, error: errorMessage });
         return `Failed to get media player status: ${errorMessage}`;
+      }
+    },
+  },
+  getEntityState: {
+    description: "Get the current state and attributes of any Home Assistant entity",
+    parameters: z.object({
+      entity: z.string().describe("The entity_id to get state for (e.g., 'light.living_room', 'climate.thermostat')"),
+    }),
+    execute: async ({ entity }) => {
+      await logger.info("TOOL", "Getting entity state", { entity });
+      
+      try {
+        const result = await getAllEntities();
+        const { entitiesByDomain } = result;
+        
+        // Find the entity across all domains
+        let foundEntity = null;
+        for (const [_domain, entities] of Object.entries(entitiesByDomain)) {
+          foundEntity = entities.find(e => e.entity_id === entity);
+          if (foundEntity) break;
+        }
+        
+        if (!foundEntity) {
+          return `Entity ${entity} not found in Home Assistant.`;
+        }
+        
+        // Format the state information
+        const stateInfo = [
+          `Entity: ${foundEntity.friendly_name} (${foundEntity.entity_id})`,
+          `State: ${foundEntity.state}`
+        ];
+        
+        await logger.debug("TOOL", "Entity state retrieved", { 
+          entity, 
+          state: foundEntity.state 
+        });
+        
+        return stateInfo.join('\n');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await logger.error("TOOL", "Failed to get entity state", { entity, error: errorMessage });
+        return `Failed to get state for ${entity}: ${errorMessage}`;
       }
     },
   },
