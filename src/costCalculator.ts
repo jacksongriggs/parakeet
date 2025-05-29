@@ -128,7 +128,7 @@ const sessionCosts: SessionCosts = {
 };
 
 // File path for persistent storage
-const COSTS_FILE = "./data/costs_data.json";
+const COSTS_FILE = ".costs/costs_data.json";
 
 // Load all-time costs from file
 export async function loadAllTimeCosts(): Promise<AllTimeCosts | null> {
