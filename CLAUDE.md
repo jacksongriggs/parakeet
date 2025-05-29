@@ -34,7 +34,7 @@ Key functionality:
 
 Key dependencies:
 
-- `@parrot/sdk`: Local SDK for audio streaming and transcription (relative import)
+- `@parrot/sdk`: Local SDK for audio streaming and transcription (relative import) @../parrot/sdk/index.ts
 - `@ai-sdk/openai`: OpenAI SDK for OpenAI and local models
 - `@ai-sdk/google`: Google Generative AI SDK for Gemini models
 - `ai`: Vercel AI SDK for streaming text generation with tool calling
