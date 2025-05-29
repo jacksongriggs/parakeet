@@ -139,4 +139,7 @@ Environment variables (set in `.env` file):
 
 ---
 
-**Last updated at commit:** `e6768c7b6316130674a2e9149edde3b06fd4e016`
+**Last updated at commit:** `3e84ce71ac8dab9975304c914ccfc5988e1fcc87`
+
+**REMIND ME NEXT TIME WE TALK**
+- need better handling of when a model isn't available, check log @logs/parakeet_2025-05-29_13-27-02.log
