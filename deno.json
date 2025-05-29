@@ -1,8 +1,9 @@
 {
   "tasks": {
-    "dev": "deno run --allow-all --env-file=.env --watch main.ts",
-    "debug": "deno run --allow-all --env-file=.env debug_test.ts",
-    "test": "deno test --allow-all --env-file=.env"
+    "dev": "deno run --allow-all --env-file=.env --watch src/main.ts",
+    "debug": "deno run --allow-all --env-file=.env scripts/debug_test.ts",
+    "test": "deno test --allow-all --env-file=.env",
+    "list-entities": "deno run --allow-all --env-file=.env src/listEntities.ts"
   },
   "imports": {
     "@ai-sdk/anthropic": "npm:@ai-sdk/anthropic@^1.2.12",

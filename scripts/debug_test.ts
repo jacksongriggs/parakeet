@@ -1,9 +1,9 @@
 #!/usr/bin/env -S deno run --allow-all --env-file=.env
 
 // Quick debug script to test rollback system components
-import { logger } from "./logger.ts";
-import { captureEntityState, startGeneration, getCurrentGeneration, cancelAndRollback, completeGeneration } from "./generationTracker.ts";
-import { getAvailableLights } from "./homeAssistant.ts";
+import { logger } from "../src/logger.ts";
+import { captureEntityState, startGeneration, getCurrentGeneration, cancelAndRollback, completeGeneration } from "../src/generationTracker.ts";
+import { getAvailableLights } from "../src/homeAssistant.ts";
 
 await logger.sessionStart();
 

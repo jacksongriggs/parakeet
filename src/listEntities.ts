@@ -65,10 +65,10 @@ ${output}`;
 
     // Write to file
     const filename = `ha_entities_${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}.txt`;
-    await Deno.writeTextFile(filename, finalOutput);
+    await Deno.writeTextFile(`./data/${filename}`, finalOutput);
     
     console.log(`Found ${states.length} entities across ${Object.keys(entitiesByDomain).length} domains`);
-    console.log(`Entity list saved to: ${filename}`);
+    console.log(`Entity list saved to: data/${filename}`);
     console.log("\nDomain summary:");
     console.log(domainCounts);
 

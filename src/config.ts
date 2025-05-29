@@ -50,14 +50,14 @@ export const CACHE_DURATION = 5;
 export const TTS_ENABLED = Deno.env.get("TTS_ENABLED") !== "false"; // Default: true
 
 // TTS voice to use (options: coral, alloy, echo, fable, onyx, nova)
-export const TTS_VOICE = Deno.env.get("TTS_VOICE") || "coral";
+export const TTS_VOICE = Deno.env.get("TTS_VOICE") || "nova";
 
 // TTS model to use
 export const TTS_MODEL = Deno.env.get("TTS_MODEL") || "gpt-4o-mini-tts";
 
 // Optional instructions for voice customization
 export const TTS_INSTRUCTIONS = Deno.env.get("TTS_INSTRUCTIONS") || 
-  "Speak as a helpful and friendly smart home assistant.";
+  "Speak in a chill, warm, and down-to-earth tone. Sound relaxed, happy, and conversational - like a friendly person who's genuinely excited to help. Keep it natural and upbeat but not overly energetic.";
 
 // ===== Advanced Configuration =====
 

@@ -259,12 +259,12 @@ export async function getAvailableClimateEntities(): Promise<ClimateEntity[]> {
 // Utility functions to check light capabilities
 export function supportsColorControl(light: Light): boolean {
   const colorModes = light.supported_color_modes || [];
-  return colorModes.some(mode => ['rgb', 'rgbw', 'rgbww', 'hs', 'xy'].includes(mode));
+  return colorModes.some((mode: string) => ['rgb', 'rgbw', 'rgbww', 'hs', 'xy'].includes(mode));
 }
 
 export function supportsTemperatureControl(light: Light): boolean {
   const colorModes = light.supported_color_modes || [];
-  return colorModes.some(mode => ['color_temp', 'rgbww'].includes(mode));
+  return colorModes.some((mode: string) => ['color_temp', 'rgbww'].includes(mode));
 }
 
 export function getBestLightControlMode(light: Light): 'color' | 'temperature' | 'brightness_only' {

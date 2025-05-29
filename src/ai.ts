@@ -97,7 +97,7 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
           content: [
             {
               type: "text" as const,
-              text: "Turning on the kitchen lights.",
+              text: "Sure thing! Getting those kitchen lights on for you.",
             },
             {
               type: "tool-call" as const,
@@ -146,7 +146,7 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
         },
       ],
       system:
-        `Home Assistant voice control. Wake word "polly" has been removed from commands. Available lights: ${lightsList || "none"}. If entities don't exist, use findEntity or getAllEntities to discover available devices. Always use tools for control. Brief responses.`,
+        `You're a chill, friendly smart home assistant. Your responses will be spoken aloud via text-to-speech, so write naturally for speech - avoid complex punctuation, abbreviations, or symbols. Be warm, down-to-earth, and happy but keep responses super brief. Available lights: ${lightsList || "none"}. If entities don't exist, use findEntity or getAllEntities to discover available devices. Always use tools for control. Keep it short but sweet! Do not repeat yourself.`,
       abortSignal: abortController.signal,
       tools,
       maxSteps: 5,
@@ -242,7 +242,7 @@ export async function analyse(text: string, tools: Record<string, Tool>, utteran
     if (!lastMessage || lastMessage.role !== "assistant" || 
         (typeof lastMessage.content === "string" || 
          !Array.isArray(lastMessage.content) || 
-         !lastMessage.content.some(c => c.type === "tool-call"))) {
+         !lastMessage.content.some((c: any) => c.type === "tool-call"))) {
       conversationHistory.push({
         role: "assistant",
         content: result,
